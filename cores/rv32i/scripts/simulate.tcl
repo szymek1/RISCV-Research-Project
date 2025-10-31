@@ -17,8 +17,9 @@
 set language    [lindex $argv 0]
 set compile_src [lindex $argv 1]
 set sim_src_dir [file normalize [lindex $argv 2]]
-set wave_dir    [file normalize [lindex $argv 3]]
-set tb_names    [lrange $argv 4 end]
+set data_dir    [file normalize [lindex $argv 3]]
+set wave_dir    [file normalize [lindex $argv 4]]
+set tb_names    [lrange $argv 5 end]
 
 # Determine HDL file extension
 if {$language eq "verilog"} {
@@ -83,21 +84,21 @@ foreach tb_file $tb_files {
     foreach src_file $design_files { 
         puts "Compiling source $src_file"
         if {$language eq "verilog"} {
-            exec xvlog $src_file -log "xvlog.log"
+            exec xvlog -define DATA_DIR="$data_dir/" $src_file -log "xvlog.log"
         } elseif {$language eq "vhdl"} {
             exec xvhdl $src_file -log "xvhdl.log"
         } elseif {$language eq "systemverilog"} {
-            exec xvlog -sv $src_file -log "xvlog.log"
+            exec xvlog -define DATA_DIR="$data_dir/" -sv $src_file -log "xvlog.log"
         }
     }
 
     puts "Compiling testbench $tb_file"
     if {$language eq "verilog"} {
-        exec xvlog $tb_file -log "xvlog.log"
+        exec xvlog -define DATA_DIR="$data_dir/" $tb_file -log "xvlog.log"
     } elseif {$language eq "vhdl"} {
         exec xvhdl $tb_file -log "xvhdl.log"
     } elseif {$language eq "systemverilog"} {
-        exec xvlog -sv $tb_file -log "xvlog.log"
+        exec xvlog -define DATA_DIR="$data_dir/" -sv $tb_file -log "xvlog.log"
     }
 
     # Elaborate

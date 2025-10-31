@@ -18,6 +18,7 @@ SIM_DIR         := $(ROOT_DIR)/simulation
 SCRIPTS_DIR     := $(ROOT_DIR)/scripts
 LOG_DIR		    := $(ROOT_DIR)/log
 BINARIES_DIR    := $(ROOT_DIR)/bin
+DATA_DIR	    := $(ROOT_DIR)/data
 
 # Project's subdirectories
 # HDL exclusive source files
@@ -67,7 +68,7 @@ conf:
 sim_all: conf
 	@echo "Simulating all testbenches"
 	@$(VIVADO_CMD) -source $(SIMULATE_TCL) \
-		-tclargs $(language) $(HDL_DIR) $(SIM_SRC_DIR) $(WAVE_DIR) \
+		-tclargs $(language) $(HDL_DIR) $(SIM_SRC_DIR) $(DATA_DIR) $(WAVE_DIR) \
 		> $(LOG_DIR)/simulation_all.log 2>&1
 	@rm -rf *.backup.* vivado.jou
 	@echo "Simulations completed for $(project_name). Logs stored at $(LOG_DIR)/simulation_all.log; Waveforms stored at $(WAVE_DIR)"
@@ -77,7 +78,7 @@ sim_sel: conf
 	@echo "Simulating specific testbenches: $(TB)..."
 	@COMPILE_SRCS="$$(python3 $(DEP_ANALYZER) --lang $(language) --tbs "$${TB}" --hdl_dir $(HDL_DIR) --sim_dir $(SIM_SRC_DIR))" && \
 	cd $(WAVE_DIR) && $(VIVADO_CMD) -source $(SIMULATE_TCL) \
-		-tclargs $(language) "$${COMPILE_SRCS}" $(SIM_SRC_DIR) $(WAVE_DIR) $(TB) \
+		-tclargs $(language) "$${COMPILE_SRCS}" $(SIM_SRC_DIR) $(DATA_DIR) $(WAVE_DIR) $(TB) \
 		> $(LOG_DIR)/simulation_selected.log 2>&1
 	@rm -rf *.backup.* vivado.jou
 	@echo "Simulations completed for $(project_name): $(TB). Logs and waveforms stored in correspnding directories in $(LOG_DIR) and $(WAVE_DIR)"
