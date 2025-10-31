@@ -26,6 +26,8 @@ SIM_SRC_DIR     := $(SOURCE_DIR)/sim
 CONSTRAINTS_DIR := $(SOURCE_DIR)/constraints
 
 # Netlist and bitstream
+VVP_DIR     := $(BINARIES_DIR)/vvp
+D_DIR   := $(BINARIES_DIR)/d
 NETLIST_DIR     := $(BINARIES_DIR)/netlist
 BITSTREAM_DIR   := $(BINARIES_DIR)/bit
 
@@ -51,26 +53,31 @@ ALL_TB_SRC := $(wildcard $(SIM_SRC_DIR)/*_tb.v)
 ALL_TB := $(ALL_TB_SRC:$(SIM_SRC_DIR)/%.v=%)
 ALL_TB_REPORT := $(ALL_TB:%=$(SIM_DIR)/%.txt)
 
+#
+# ================ IVERILOG ================
+#
+
 # Build TB and output convert dependencies to Makefile .d format
-$(BINARIES_DIR)/vvp/%.vvp: $(SIM_SRC_DIR)/%.v
-	@echo "Compiling $(@F:.vvp=)"
-	mkdir -p $(@D)
-	iverilog $(IVERILOG_FLAGS) \
+.PRECIOUS: $(VVP_DIR)/%.vvp
+$(VVP_DIR)/%.vvp: $(SIM_SRC_DIR)/%.v
+	@echo "Compiling testbench \"$(@F:.vvp=)\""
+	@mkdir -p $(VVP_DIR) $(D_DIR) $(LOG_DIR)
+	@iverilog $(IVERILOG_FLAGS) \
 		-Mall=$(@:.vvp=.d.raw) -y $(HDL_DIR) -I $(<D) \
 		-DDATA_DIR=\"$(DATA_DIR)/\" \
-		-o $@ $<
+		-o $@ $< > $(LOG_DIR)/compile_$(@F:.vvp=).txt 2>&1
 	@{ \
 	  printf '%s:' '$@'; \
 	  sort -u $(@:.vvp=.d.raw) | tr '\n' ' '; \
 	  printf '\n'; \
-	} > $(@:.vvp=.d)
+	} > $(@:$(VVP_DIR)/%.vvp=$(D_DIR)/%.d)
 	@rm $(@:.vvp=.d.raw)
 
 # Run TB and output report
-$(SIM_DIR)/%/sim_output.txt: $(BINARIES_DIR)/vvp/%.vvp
-	mkdir -p $(@D)
-	@echo "Running $(<F:.vvp=)"
-	vvp $< | tee $@
+$(SIM_DIR)/%/sim_output.txt: $(VVP_DIR)/%.vvp
+	@mkdir -p $(@D)
+	@echo "Running testbench \"$(<F:.vvp=)\""
+	@cd $(@D) && vvp $< > $@ 2>&1
 
 # Alias each tb name to its report
 $(ALL_TB): %: $(SIM_DIR)/%/sim_output.txt
@@ -121,7 +128,7 @@ program_fpga: bit
 
 
 #
-# ================ VIVADO ================
+# ================ MISC ================
 #
 
 .PHONY: clean
@@ -131,4 +138,4 @@ clean:
 	@echo "Clean completed."
 
 # Pull in previously generated .d dependency files
--include $(wildcard $(BINARIES_DIR)/vvp/*.d)
+-include $(wildcard $(D_DIR)/*.d)
