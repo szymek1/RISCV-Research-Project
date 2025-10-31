@@ -21,17 +21,9 @@ BINARIES_DIR    := $(ROOT_DIR)/bin
 DATA_DIR	    := $(ROOT_DIR)/data
 
 # Project's subdirectories
-# HDL exclusive source files
 HDL_DIR 	    := $(SOURCE_DIR)/hdl
-
-# testbenches
 SIM_SRC_DIR     := $(SOURCE_DIR)/sim
-
-# constraints
 CONSTRAINTS_DIR := $(SOURCE_DIR)/constraints
-
-# Waveforms
-WAVE_DIR 	    := $(SIM_DIR)/waveforms
 
 # Netlist and bitstream
 NETLIST_DIR     := $(BINARIES_DIR)/netlist
@@ -53,37 +45,64 @@ device 		    := xc7z020clg400-1
 
 VIVADO_CMD 		:= vivado -mode batch
 
-# Directories to verify during configuration directive
-DIRS := $(HDL_DIR) $(CONSTRAINTS_DIR) $(SIM_SRC_DIR) $(WAVE_DIR) \
-        $(NETLIST_DIR) $(BITSTREAM_DIR) $(LOG_DIR)
+IVERILOG_FLAGS := -g2012 -Wall
 
-.PHONY: conf sim_all sim_sel bit program_fpga clean
+ALL_TB_SRC := $(wildcard $(SIM_SRC_DIR)/*_tb.v)
+ALL_TB := $(ALL_TB_SRC:$(SIM_SRC_DIR)/%.v=%)
+ALL_TB_REPORT := $(ALL_TB:%=$(SIM_DIR)/%.txt)
 
-conf:
-	@echo "Checking and creating necessary directories..."
-	@mkdir -p $(DIRS)
-	@echo "Directories ensured."
+# Build TB and output convert dependencies to Makefile .d format
+$(BINARIES_DIR)/vvp/%.vvp: $(SIM_SRC_DIR)/%.v
+	@echo "Compiling $(@F:.vvp=)"
+	mkdir -p $(@D)
+	iverilog $(IVERILOG_FLAGS) \
+		-Mall=$(@:.vvp=.d.raw) -y $(HDL_DIR) -I $(<D) \
+		-DDATA_DIR=\"$(DATA_DIR)/\" \
+		-o $@ $<
+	@{ \
+	  printf '%s:' '$@'; \
+	  sort -u $(@:.vvp=.d.raw) | tr '\n' ' '; \
+	  printf '\n'; \
+	} > $(@:.vvp=.d)
+	@rm $(@:.vvp=.d.raw)
 
-# Run all testbenches
-sim_all: conf
+# Run TB and output report
+$(SIM_DIR)/%/sim_output.txt: $(BINARIES_DIR)/vvp/%.vvp
+	mkdir -p $(@D)
+	@echo "Running $(<F:.vvp=)"
+	vvp $< | tee $@
+
+# Alias each tb name to its report
+$(ALL_TB): %: $(SIM_DIR)/%/sim_output.txt
+
+# Target that combines all TBs
+.PHONY: sim
+sim: $(ALL_TB)
+
+#
+# ================ VIVADO ================
+#
+
+# - Run all testbenches: example $ make sim-vivado
+# - Run selected testbenches: example $ make sim-vivado TB="tb1 tb2 tb3" USE "...", no need for file extension
+.PHONY: sim-vivado
+sim-vivado:
+	mkdir -p $(SIM_DIR) $(LOG_DIR)
+ifeq ($(TB),)
 	@echo "Simulating all testbenches"
-	@$(VIVADO_CMD) -source $(SIMULATE_TCL) \
-		-tclargs $(language) $(HDL_DIR) $(SIM_SRC_DIR) $(DATA_DIR) $(WAVE_DIR) \
-		> $(LOG_DIR)/simulation_all.log 2>&1
-	@rm -rf *.backup.* vivado.jou
-	@echo "Simulations completed for $(project_name). Logs stored at $(LOG_DIR)/simulation_all.log; Waveforms stored at $(WAVE_DIR)"
-
-# Run selected testbenches: example $ make sim_sel TB="tb1 tb2 tb3" USE "...", no need for file extension
-sim_sel: conf
+else
 	@echo "Simulating specific testbenches: $(TB)..."
-	@COMPILE_SRCS="$$(python3 $(DEP_ANALYZER) --lang $(language) --tbs "$${TB}" --hdl_dir $(HDL_DIR) --sim_dir $(SIM_SRC_DIR))" && \
-	cd $(WAVE_DIR) && $(VIVADO_CMD) -source $(SIMULATE_TCL) \
-		-tclargs $(language) "$${COMPILE_SRCS}" $(SIM_SRC_DIR) $(DATA_DIR) $(WAVE_DIR) $(TB) \
-		> $(LOG_DIR)/simulation_selected.log 2>&1
+endif
+	@$(VIVADO_CMD) -source $(SIMULATE_TCL) \
+		-tclargs $(language) $(HDL_DIR) $(SIM_SRC_DIR) $(DATA_DIR) $(SIM_DIR) $(TB) \
+		> $(LOG_DIR)/sim.log 2>&1
 	@rm -rf *.backup.* vivado.jou
-	@echo "Simulations completed for $(project_name): $(TB). Logs and waveforms stored in correspnding directories in $(LOG_DIR) and $(WAVE_DIR)"
+	@echo "Simulations completed for $(project_name). Logs stored at $(LOG_DIR)/sim.log; Simulation output stored at $(SIM_DIR)"
 
-bit: conf
+.PHONY: bit
+bit: $(BITSTREAM_DIR)/$(project_name).bit
+$(BITSTREAM_DIR)/$(project_name).bit:
+	mkdir -p $(NETLIST_DIR) $(BITSTREAM_DIR) $(LOG_DIR)
 	@echo "Building bitstream..."
 	@$(VIVADO_CMD) -source $(BUILD_TCL) \
 		-tclargs $(language) $(HDL_DIR) $(CONSTRAINTS_DIR) $(NETLIST_DIR) $(BITSTREAM_DIR) $(device) $(project_name) $(top_module) \
@@ -91,6 +110,7 @@ bit: conf
 	@rm -rf *.backup.* vivado.jou
 	@echo "Build completed for $(project_name). Logs stored at $(LOG_DIR)/build.log"
 
+.PHONY: program_fpga
 program_fpga: bit
 	@echo "Programming FPGA..."
 	@$(VIVADO_CMD) -source $(PROGRAM_TCL) \
@@ -99,7 +119,16 @@ program_fpga: bit
 	@rm -rf *.backup.* vivado.jou
 	@echo "FPGA programmed for $(project_name). Logs stored at $(LOG_DIR)/program.log"
 
+
+#
+# ================ VIVADO ================
+#
+
+.PHONY: clean
 clean:
 	@echo "Cleaning generated files..."
-	@rm -rf $(BINARIES_DIR)/* $(LOG_DIR)/* *.backup.* vivado.jou
+	@rm -rf $(BINARIES_DIR) $(LOG_DIR) $(SIM_DIR) *.backup.* vivado.jou vivado.log
 	@echo "Clean completed."
+
+# Pull in previously generated .d dependency files
+-include $(wildcard $(BINARIES_DIR)/vvp/*.d)
