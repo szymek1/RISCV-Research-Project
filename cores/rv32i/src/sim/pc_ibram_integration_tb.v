@@ -68,8 +68,7 @@ module pc_ibram_integration_tb(
         .stall(pc_stall),
         .pc_select(1'b0),
         .pc_in(`BOOT_ADDR),
-        .pc_out(pc_out),
-        .pc_next()
+        .pc_out(pc_out)
     );
     
     bram32 I_MEM(

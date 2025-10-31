@@ -55,8 +55,7 @@ module self_dep_hazard_trigger_tb(
         .stall(pc_stall),
         .pc_select(1'b0),
         .pc_in(`BOOT_ADDR),
-        .pc_out(pc_out),
-        .pc_next()
+        .pc_out(pc_out)
     );
     
     wire [`DATA_WIDTH-1:0] instruction;
