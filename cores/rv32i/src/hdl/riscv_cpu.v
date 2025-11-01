@@ -32,7 +32,7 @@ module riscv_cpu(
     wire [`DATA_WIDTH-1:0]  pc_plus_4;       // used for returning from a jump
     wire                    branch;          // provided by control module- branch decoder
     wire [`INSTR_WIDTH-1:0] immediate;       // provided by sign_extend module
-    reg  [`INSTR_WIDTH-1:0] pc_plus_sec_src; // provided by sequentail block, which 
+    reg  [`INSTR_WIDTH-1:0] pc_plus_sec_src; // provided by sequential block, which 
                                              // decodes second_add_src from control module
 
     pc PC(
@@ -127,7 +127,7 @@ module riscv_cpu(
     reg                    wb_valid;    // has to be set high after every write back operation
     
     // Block dedicated to deciding what should be the output to write back to register file.
-    // It changes accordingly to a current instruction: reading from data BRAM, register-to-tegister
+    // It changes accordingly to a current instruction: reading from data BRAM, register-to-register
     // or saving pc before the jump.
     wire [`INSTR_WIDTH-1:0]    alu_results;
     reg  [`DATA_WIDTH-1:0]     wrt_back_data;
@@ -154,8 +154,8 @@ module riscv_cpu(
     
     // Block dedicated U-Type instruction handling.
     // Regfile will be updated with a value either:
-    // lui  : immediate 20 bits shited left by 12
-    // auipc: immediate 20 bits shited left by 12 + current pc
+    // lui  : immediate 20 bits shifted left by 12
+    // auipc: immediate 20 bits shifted left by 12 + current pc
     // jalr : sign-extended 12-bit imm12 to the register rs1
     always @(*) begin
         case (second_add_src)

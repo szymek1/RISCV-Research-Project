@@ -44,7 +44,7 @@ module control(
     );
     
     /*
-    TODO: allow for full clock synchornization, probably during swithcing to a pipelined version
+    TODO: allow for full clock synchronization, probably during switching to a pipelined version
           where intermediate registers will need to handle 1 clock delays.
     */
     reg [1:0] alu_op;
