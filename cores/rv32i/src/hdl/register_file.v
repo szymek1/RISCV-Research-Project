@@ -41,7 +41,7 @@ module register_file(
     
     );
     
-    reg [`DATA_WIDTH-1:0] registers [`DATA_WIDTH-1:1]; // skipping x0, which is hard-wired to 32'b0
+    reg [`DATA_WIDTH-1:0] registers [1:`NUM_REGISTERS-1]; // skipping x0, which is hard-wired to 32'b0
     
     // WRITE: clk and rst are the control signals
     integer reg_id;
@@ -51,7 +51,7 @@ module register_file(
         if (rst == 1'b1) begin
             // Looping only until 31st register as x0 is always 0x0
             // therefore skipping reg_id=0 (not defined in the array)
-            for (reg_id = 1 ; reg_id < 32; reg_id = reg_id + 1) begin
+            for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
                 registers[reg_id] <= 32'b0;
             end
             rs1 <= 32'h0;

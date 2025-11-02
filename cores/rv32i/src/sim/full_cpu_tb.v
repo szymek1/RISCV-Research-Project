@@ -88,95 +88,92 @@ module full_cpu_tb();
         forever #5 clk = ~clk;
     end
 
-    integer inst_numb;
-    integer data_numb;
-    integer i_inst;
-    integer i_data;
+    string data_folder;
+    reg [`DATA_WIDTH-1:0] pc_last;
+    reg [`DATA_WIDTH-1:0] expected_registers [1:`NUM_REGISTERS-1];
+    reg [`DATA_WIDTH-1:0] expected_memory    [`I_BRAM_DEPTH];
+
+    // temporary variables
+    integer reg_id;
+    integer mem_addr;
+    integer found_error;
+    reg [`DATA_WIDTH-1:0] value;
+    reg [`DATA_WIDTH-1:0] expected_value;
+
     initial begin
         $dumpfile("full_cpu_tb.vcd");
         $dumpvars(0, full_cpu_tb);
-
-
-        inst_numb = 16;
-        data_numb = 3;
+        $dumpvars(0, expected_memory[0]);
+        $dumpvars(0, cpu.REGFILE.registers[5]);
+        $dumpvars(0, cpu.REGFILE.registers[6]);
+        for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
+            expected_registers[reg_id] = 32'b0;
+        end
+        for (mem_addr = 0 ; mem_addr < `I_BRAM_DEPTH; mem_addr = mem_addr + 1) begin
+            expected_memory[mem_addr] = 32'b0;
+        end
 
         // Reset
         rst              = 1'b1;
         pc_stall         = 1'b1;
-        // i_w_addr         = 10'b0;
-        // i_w_dat          = 32'h0;
-        // i_w_enb          = 1'b0;
-        // i_r_enb          = 1'b0;
-        // d_w_addr         = 10'h0;
-        // d_w_dat          = 32'h0;
-        // d_w_enb          = 1'b0;
-        // rd_enbl          = 1'b0;
-        // wrt_dat          = 32'h0;
-        // d_bram_init_done = 1'b0;
         #10;
 
-        // Loading data into data BRAM
-        $readmemh({`RISCV_PROGRAMS, "b_type/bltu_bge_bgeu_instructions_test_data.hex"}, d_mem.mem);
-        // Loading program into instruction BRAM
-        $readmemh({`RISCV_PROGRAMS, "b_type/bltu_bge_bgeu_instructions_test.new.hex"}, i_mem.mem);
+        #10
+        $value$plusargs ("data=%s", data_folder);
+        $display("Loading data from %s", data_folder);
+        $readmemh({data_folder, "memory.hex"}, d_mem.mem);
+        $readmemh({data_folder, "program.hex"}, i_mem.mem);
+        $readmemh({data_folder, "expected_registers.hex"}, expected_registers);
+        $readmemh({data_folder, "expected_memory.hex"}, expected_memory);
 
-        // De-assert reset and initialize data BRAM
+        // De-assert reset
         rst = 1'b0;
         #10;
 
         // Execute program
         $display("Executing program...");
-        // rd_enbl  = 1'b1;
-        // i_r_enb  = 1'b1;
         pc_stall = 1'b0;
         #5;
-        for (i_inst = 0; i_inst < inst_numb; i_inst = i_inst + 1) begin
+        pc_last = -1;
+        while (cpu.pc_out != pc_last) begin
             display_results();
+            pc_last = cpu.pc_out;
             #10;
         end
 
-        // Verify results
         $display("Verifying results...");
-        if (cpu.REGFILE.registers[5] == 32'h00000005) begin
-            $display("x5 (registers[5]) = %h, matches expected", cpu.REGFILE.registers[5]);
-        end else begin
-            $display("x5 (registers[5]) = %h, expected 00000005", cpu.REGFILE.registers[5]);
+        found_error = 0;
+        #1;
+        for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
+            value = cpu.REGFILE.registers[reg_id];
+            expected_value = expected_registers[reg_id];
+            if (value == expected_value) begin
+                $display("[INFO]  registers[%d] = 0x%h, matches expected",
+                    reg_id, value);
+            end else begin
+                found_error = 1;
+                $display("[ERROR] registers[%d] = 0x%h, expected 0x%h",
+                    reg_id, value, expected_value);
+            end
         end
-        if (cpu.REGFILE.registers[6] == 32'hFFFFFFFF) begin
-            $display("x6 (registers[6]) = %h, matches expected", cpu.REGFILE.registers[6]);
-        end else begin
-            $display("x6 (registers[6]) = %h, expected FFFFFFFF", cpu.REGFILE.registers[6]);
-        end
-        if (cpu.REGFILE.registers[7] == 32'h00000008) begin 
-            $display("x7 (registers[7]) = %h, matches expected", cpu.REGFILE.registers[7]);
-        end else begin
-            $display("x7 (registers[7]) = %h, expected 00000008", cpu.REGFILE.registers[7]);
-        end
-        if (cpu.REGFILE.registers[8] == 32'h0000000A) begin 
-            $display("x8 (registers[8]) = %h, matches expected", cpu.REGFILE.registers[8]);
-        end else begin
-            $display("x8 (registers[8]) = %h, expected 0000000A", cpu.REGFILE.registers[8]);
-        end
-        if (cpu.REGFILE.registers[9] == 32'h0000000C) begin 
-            $display("x9 (registers[9]) = %h, matches expected", cpu.REGFILE.registers[9]);
-        end else begin
-            $display("x9 (registers[9]) = %h, expected 0000000C", cpu.REGFILE.registers[9]);
+        for (mem_addr = 0 ; mem_addr < `I_BRAM_DEPTH; mem_addr = mem_addr + 1) begin
+            value = d_mem.mem[mem_addr];
+            expected_value = expected_memory[mem_addr];
+            if (value == expected_value) begin
+                // only print unexpected values since memory is quite large
+                // $display("[INFO]  mem[0x%h] = 0x%h, matches expected",
+                //     mem_addr * `BYTES_PER_WORD, value);
+            end else begin
+                found_error = 1;
+                $display("[ERROR] mem[0x%h] = 0x%h, expected 0x%h",
+                    mem_addr * `BYTES_PER_WORD, value, expected_value);
+            end
         end
 
-        if (d_mem.mem[0] == 32'h00000008) begin 
-            $display("mem[0x0] = %h, matches expected", d_mem.mem[0]);
+        if (found_error == 0) begin
+            $display("No error found");
         end else begin
-            $display("mem[0x0] = %h, expected 00000008", d_mem.mem[0]);
-        end
-        if (d_mem.mem[1] == 32'h0000000A) begin 
-            $display("mem[0x4] = %h, matches expected", d_mem.mem[1]);
-        end else begin
-            $display("mem[0x4] = %h, expected 0000000A", d_mem.mem[1]);
-        end
-        if (d_mem.mem[2] == 32'h0000000C) begin 
-            $display("mem[0x8] = %h, matches expected", d_mem.mem[2]);
-        end else begin
-            $display("mem[0x8] = %h, expected 0000000C", d_mem.mem[2]);
+            $display("Found errors (see output above)");
         end
 
         $display("All tests completed");
