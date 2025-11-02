@@ -90,7 +90,7 @@ module full_cpu();
 
     string data_folder;
     reg [`DATA_WIDTH-1:0] expected_registers [1:`NUM_REGISTERS-1];
-    reg [`DATA_WIDTH-1:0] expected_memory    [`I_BRAM_DEPTH];
+    reg [`DATA_WIDTH-1:0] expected_memory    [`RAM_SIZE_WORDS];
 
     // temporary variables
     reg [`DATA_WIDTH-1:0] pc_last;
@@ -110,7 +110,7 @@ module full_cpu();
         for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
             expected_registers[reg_id] = 32'b0;
         end
-        for (mem_addr = 0 ; mem_addr < `I_BRAM_DEPTH; mem_addr = mem_addr + 1) begin
+        for (mem_addr = 0 ; mem_addr < `RAM_SIZE_WORDS; mem_addr = mem_addr + 1) begin
             expected_memory[mem_addr] = 32'b0;
         end
 
@@ -164,7 +164,7 @@ module full_cpu();
                     reg_id, value, expected_value);
             end
         end
-        for (mem_addr = 0 ; mem_addr < `I_BRAM_DEPTH; mem_addr = mem_addr + 1) begin
+        for (mem_addr = 0 ; mem_addr < `RAM_SIZE_WORDS; mem_addr = mem_addr + 1) begin
             value = d_mem.mem[mem_addr];
             expected_value = expected_memory[mem_addr];
             if (value == expected_value) begin

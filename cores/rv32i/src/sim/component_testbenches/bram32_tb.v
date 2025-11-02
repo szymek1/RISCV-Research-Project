@@ -68,7 +68,7 @@ module bram32_tb(
     );
     
     // Program will be stored here before loading to the BRAM
-    reg [`DATA_WIDTH-1:0] init_mem [0:`I_BRAM_DEPTH-1];
+    reg [`DATA_WIDTH-1:0] init_mem [0:`RAM_SIZE_WORDS-1];
     
     initial begin
         clk = 0;

@@ -44,12 +44,12 @@ module bram32 (
     output wire [31:0]                debug_data
 );
 
-    reg [`DATA_WIDTH-1:0] mem [0:`I_BRAM_DEPTH-1];
+    reg [`DATA_WIDTH-1:0] mem [0:`RAM_SIZE_WORDS-1];
 
     integer i;
     always @(posedge clk) begin
         if (rst) begin
-            for (i = 0; i < `I_BRAM_DEPTH; i = i + 1) begin
+            for (i = 0; i < `RAM_SIZE_WORDS; i = i + 1) begin
                 mem[i] <= 32'h0;
             end
         end

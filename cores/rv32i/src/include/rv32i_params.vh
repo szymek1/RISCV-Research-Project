@@ -14,8 +14,8 @@
 `define BYTES_PER_WORD    4              // Each 32-bit word contains 4 bytes
 
 // RAM size
-`define I_BRAM_DEPTH      1024           // Number of words in RAM (instruction and data)
-`define RAM_ADDR_WIDTH ($clog2(`I_BRAM_DEPTH) + $clog2(`BYTES_PER_WORD))
+`define RAM_SIZE_WORDS      1024           // Number of words in RAM (instruction and data)
+`define RAM_ADDR_WIDTH ($clog2(`RAM_SIZE_WORDS) + $clog2(`BYTES_PER_WORD))
 
 // DATA_DIR points to the location of the data folder.
 // Since in Vivado xsim, relative paths are interpreted relative to its
