@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------
 # Author: Szymon Bogus
-# Date:   I don't remeber
+# Date:   I don't remember
 #
 # Description:
 # Script used to assembly and then translate into HEX RISC-V assembly 
@@ -18,20 +18,22 @@ def execute(args) -> None:
     
     file = Path(args.file)
     if not file.is_file():
-        raise FileNotFoundError("Couldnt find file: {}".format(file))
+        raise FileNotFoundError("Couldn't find file: {}".format(file))
     elif args.verbosity:
         print("Located file: {}".format(file))
         
     file_o = file.with_suffix(".o")
     file_elf = file.with_suffix(".elf")
+    file_tmp_hex = file.with_suffix(".tmp_hex")
+    file_coe = file.with_suffix(".coe")
     file_hex = file.with_suffix(".hex")
     
     if args.verbosity:
-        print("Creating:\n{}\n{}\n{}".format(file_o, file_elf, file_hex))
+        print("Creating:\n{}\n{}\n{}".format(file_o, file_elf, file_tmp_hex))
         
     make_o = "riscv64-unknown-elf-as -march=rv32i -mabi=ilp32 -o " + str(file_o) + " " + args.file
     make_elf = "riscv64-unknown-elf-ld -march=rv32i -melf32lriscv -Ttext=0x0 -o " + str(file_elf) + " " + str(file_o)
-    make_hex = "riscv64-unknown-elf-objcopy -O verilog " + str(file_elf) + " " + str(file_hex)
+    make_hex = "riscv64-unknown-elf-objcopy -O verilog " + str(file_elf) + " " + str(file_tmp_hex)
     commands = (make_o, make_elf, make_hex)
     
     for command in commands:
@@ -40,13 +42,11 @@ def execute(args) -> None:
                 print("Executing: {}".format(command))
             subprocess.run(command, shell=True, check=True)
         except subprocess.CalledProcessError as cpe:
-            raise RuntimeError("Couldnt run: {}, command returned: {}".format(command, cpe))
-        
-    file_coe = file.with_suffix(".coe")
+            raise RuntimeError("Couldn't run: {}, command returned: {}".format(command, cpe))
     
     # Convert .hex to .coe
     try:
-        with open(file_hex, 'r') as hex_file, open(file_coe, 'w') as coe_file, open(file_hex.with_suffix(".new.hex"), 'w') as new_hex_file:
+        with open(file_tmp_hex, 'r') as hex_file, open(file_coe, 'w') as coe_file, open(file_hex, 'w') as new_hex_file:
             coe_file.write("memory_initialization_radix=16;\nmemory_initialization_vector=\n")
             instruction_count = 0
             for line in hex_file:
@@ -83,7 +83,7 @@ def execute(args) -> None:
         print("Successfully created {} with {} instructions".format(file_coe, instruction_count))
     
     # Remove intermediate files
-    for f in (file_o, file_elf, file_hex):
+    for f in (file_o, file_elf, file_tmp_hex, file_coe):
         if f.exists():
             f.unlink()
     
@@ -91,7 +91,7 @@ def execute(args) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
-    parser.add_argument("--file", type=str, help="Path to the *.S file")
+    parser.add_argument("--file", type=str, help="Path to the *.S file", required=True)
     parser.add_argument("--verbosity", type=bool, default=False, choices=[True, False], help="Verbose output")
     
     args = parser.parse_args()
