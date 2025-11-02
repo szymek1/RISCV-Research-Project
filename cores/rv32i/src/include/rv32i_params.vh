@@ -25,8 +25,4 @@
 `define DATA_DIR "../../data/"
 `endif
 
-// Testbench
-// relative paths for hex files
-`define RISCV_PROGRAMS    `DATA_DIR
-
 `endif

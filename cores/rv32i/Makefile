@@ -56,20 +56,40 @@ BITSTREAM_DIR   := $(BINARIES_DIR)/bit
 IVERILOG_FLAGS  := -g2012 -Wall
 VVP_DIR         := $(BINARIES_DIR)/vvp
 D_DIR           := $(BINARIES_DIR)/d
+FULL_CPU_VVP    := $(VVP_DIR)/full_cpu.vvp
 
 #
 # ================ MISC ================
 #
 
-.PHONY: list-test-progs
-list-test-progs:
+.PHONY: list-tbs
+list-tbs:
+	@echo Found testbenches:
+	@echo $(TB_NAMES)
+
+.PHONY: list-progs
+list-progs:
 	@echo Found test programs:
 	@echo $(TEST_PROG_NAMES)
 
-.PHONY: list-testbenches
-list-testbenches:
-	@echo Found testbenches:
-	@echo $(TB_NAMES)
+# Alias each tb name to its report
+.PHONY: $(TB_NAMES)
+$(TB_NAMES): %: $(SIM_DIR)/component_testbenches/%/sim_output.txt
+
+# Alias each prop to its report
+.PHONY: $(TEST_PROG_NAMES)
+$(TEST_PROG_NAMES): %: $(SIM_DIR)/progs/%/sim_output.txt
+
+# Target that combines all TBs
+.PHONY: sim-tbs
+sim-tbs: $(TB_NAMES)
+
+# Target that combines all progs
+.PHONY: sim-progs
+sim-progs: $(TEST_PROG_NAMES)
+
+.PHONY: sim
+sim: sim-tbs sim-progs
 
 #
 # ================ IVERILOG ================
@@ -79,30 +99,29 @@ list-testbenches:
 .PRECIOUS: $(VVP_DIR)/%.vvp
 $(VVP_DIR)/%.vvp: $(SIM_SRC_DIR)/%.v
 	@echo "Compiling testbench \"$(@F:.vvp=)\""
-	@mkdir -p $(@D) $(D_DIR) $(LOG_DIR)
+	@mkdir -p $(VVP_DIR)/$* $(D_DIR)/$* $(LOG_DIR)
 	@iverilog $(IVERILOG_FLAGS) \
-		-Mall=$(@:.vvp=.d.raw) -y $(HDL_DIR) -I $(<D) \
+		-Mall=$(D_DIR)/$*.d.raw -y $(HDL_DIR) -I $(<D) -I $(HDL_DIR) \
 		-DDATA_DIR=\"$(DATA_DIR)/\" \
 		-o $@ $< > $(LOG_DIR)/compile_$(@F:.vvp=).txt 2>&1
 	@{ \
 	  printf '%s:' '$@'; \
-	  sort -u $(@:.vvp=.d.raw) | tr '\n' ' '; \
+	  sort -u $(D_DIR)/$*.d.raw | tr '\n' ' '; \
 	  printf '\n'; \
-	} > $(@:$(VVP_DIR)/%.vvp=$(D_DIR)/%.d)
-	@rm $(@:.vvp=.d.raw)
+	} > $(D_DIR)/$*.d
+	@rm $(D_DIR)/$*.d.raw
 
 # Run TB and output report
-$(SIM_DIR)/%/sim_output.txt: $(VVP_DIR)/%.vvp
+$(SIM_DIR)/component_testbenches/%/sim_output.txt: $(VVP_DIR)/component_testbenches/%.vvp
 	@mkdir -p $(@D)
-	@echo "Running testbench \"$(<F:.vvp=)\""
+	@echo "Running testbench \"$*\""
 	@cd $(@D) && vvp $< > $@ 2>&1
 
-# # Alias each tb name to its report
-# $(TB_NAMES): %: $(SIM_DIR)/component_testbenches/%/sim_output.txt
-
-# # Target that combines all TBs
-# .PHONY: sim
-# sim: $(TB_NAMES)
+# Run program on full_cpu
+$(SIM_DIR)/progs/%/sim_output.txt: $(FULL_CPU_VVP) $(DATA_DIR)/%/program.hex $(DATA_DIR)/%/memory.hex $(DATA_DIR)/%/expected_registers.hex $(DATA_DIR)/%/expected_memory.hex
+	@mkdir -p $(@D)
+	@echo "Running prog \"$*\""
+	@cd $(@D) && vvp $< +data=$(DATA_DIR)/$* > $@ 2>&1
 
 #
 # ================ VIVADO ================
@@ -157,3 +176,4 @@ clean:
 
 # Pull in previously generated .d dependency files
 -include $(wildcard $(D_DIR)/*.d)
+-include $(wildcard $(D_DIR)/**/*.d)

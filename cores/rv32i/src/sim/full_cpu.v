@@ -3,7 +3,7 @@
 `include "../include/rv32i_params.vh"
 `include "../include/rv32i_control.vh"
 
-module full_cpu_tb();
+module full_cpu();
 
     reg clk;
     reg rst;
@@ -103,7 +103,7 @@ module full_cpu_tb();
 
     initial begin
         $dumpfile("full_cpu_tb.vcd");
-        $dumpvars(0, full_cpu_tb);
+        $dumpvars(0, full_cpu);
         $dumpvars(0, expected_memory[0]);
         $dumpvars(0, cpu.REGFILE.registers[5]);
         $dumpvars(0, cpu.REGFILE.registers[6]);

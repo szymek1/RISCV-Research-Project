@@ -18,7 +18,7 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-`include "../include/rv32i_params.vh"
+`include "../../include/rv32i_params.vh"
 
 
 module pc_ibram_integration_tb(
@@ -109,7 +109,7 @@ module pc_ibram_integration_tb(
         #10;
         
         // Load .hex file into init_mem
-        $readmemh({`RISCV_PROGRAMS, "r_type/add_registers.new.hex"}, init_mem);
+        $readmemh({`DATA_DIR, "r_type/add_registers/program.hex"}, init_mem);
         
         // Deassert reset and initialize BRAM
         rst = 1'b0; 

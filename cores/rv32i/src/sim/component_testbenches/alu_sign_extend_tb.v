@@ -20,8 +20,8 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-`include "include/rv32i_params.vh"
-`include "include/rv32i_control.vh"
+`include "../../include/rv32i_params.vh"
+`include "../../include/rv32i_control.vh"
 
 
 module alu_sign_extend_tb(

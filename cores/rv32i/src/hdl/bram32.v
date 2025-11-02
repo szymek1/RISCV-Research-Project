@@ -44,7 +44,7 @@ module bram32 (
     output wire [31:0]                debug_data
 );
 
-    reg [`DATA_WIDTH-1:0] mem [`I_BRAM_DEPTH];
+    reg [`DATA_WIDTH-1:0] mem [0:`I_BRAM_DEPTH-1];
 
     integer i;
     always @(posedge clk) begin
