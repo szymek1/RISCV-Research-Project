@@ -1,5 +1,5 @@
 # Simple RV32I program using J-type, R-type, S-type and I-type instructions
-# Executes load instructions, jumps to a subroutine and performs ALU operations and stroes the data.
+# Executes load instructions, jumps to a subroutine and performs ALU operations and stores the data.
 
 .text
 .global _start

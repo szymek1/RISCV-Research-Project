@@ -25,8 +25,8 @@ do_add:
     j loop                  # If equal, skip to loop 
 
 do_or:
-    lw x10, 12(x10)         # x10 = mem[0x100C] = 0x00000005 (second operand for OR)
-    or x11, x8, x10         # x11 = x8 | x10 = 0x00000006 | 0x00000005 = 0x00000007
+    lw x10, 12(x10)         # x10 = mem[0x100C] = 0x00000006 (second operand for OR)
+    or x11, x8, x10         # x11 = x8 | x10 = 0x00000006 | 0x00000006 = 0x00000006
     sw x11, 0xC(x0)         # Store x11 to mem[0xC], updating the memory
 
     # Infinite loop to prevent undefined behavior

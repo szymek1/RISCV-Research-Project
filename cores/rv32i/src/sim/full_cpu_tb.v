@@ -89,11 +89,12 @@ module full_cpu_tb();
     end
 
     string data_folder;
-    reg [`DATA_WIDTH-1:0] pc_last;
     reg [`DATA_WIDTH-1:0] expected_registers [1:`NUM_REGISTERS-1];
     reg [`DATA_WIDTH-1:0] expected_memory    [`I_BRAM_DEPTH];
 
     // temporary variables
+    reg [`DATA_WIDTH-1:0] pc_last;
+    integer total_steps;
     integer reg_id;
     integer mem_addr;
     integer found_error;
@@ -121,10 +122,10 @@ module full_cpu_tb();
         #10
         $value$plusargs ("data=%s", data_folder);
         $display("Loading data from %s", data_folder);
-        $readmemh({data_folder, "memory.hex"}, d_mem.mem);
-        $readmemh({data_folder, "program.hex"}, i_mem.mem);
-        $readmemh({data_folder, "expected_registers.hex"}, expected_registers);
-        $readmemh({data_folder, "expected_memory.hex"}, expected_memory);
+        $readmemh({data_folder, "/memory.hex"}, d_mem.mem);
+        $readmemh({data_folder, "/program.hex"}, i_mem.mem);
+        $readmemh({data_folder, "/expected_registers.hex"}, expected_registers);
+        $readmemh({data_folder, "/expected_memory.hex"}, expected_memory);
 
         // De-assert reset
         rst = 1'b0;
@@ -135,14 +136,21 @@ module full_cpu_tb();
         pc_stall = 1'b0;
         #5;
         pc_last = -1;
-        while (cpu.pc_out != pc_last) begin
+        total_steps = 0;
+        while (cpu.pc_out != pc_last && total_steps < 1000) begin
             display_results();
             pc_last = cpu.pc_out;
+            total_steps = total_steps + 1;
             #10;
         end
 
-        $display("Verifying results...");
         found_error = 0;
+        if (total_steps >= 1000) begin
+            $display("[ERROR] Exceeded allowed number of cycles");
+            found_error = 1;
+        end
+
+        $display("Verifying results...");
         #1;
         for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
             value = cpu.REGFILE.registers[reg_id];
