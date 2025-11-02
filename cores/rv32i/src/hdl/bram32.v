@@ -23,29 +23,29 @@
 
 
 module bram32 (
-    input                                                                clk,
-    input                                                                rst,
+    input                             clk,
+    input                             rst,
     // Write port inputs
-    input  wire [$clog2(`I_BRAM_DEPTH) + $clog2(`BYTES_PER_WORD) - 1 :0] w_addr, // bytes alignment
-    input  wire [`DATA_WIDTH-1:0]                                        w_dat,
-    input  wire                                                          w_enb, 
-    input  wire [3:0]                                                    byte_enb, // mask indicating which byte from the word to edit:
-                                                                                   // Example:
-                                                                                   // to write the least significant byte of a word at address 0x1000
-                                                                                   // set write_enb = 0b0001
-                                                                                   // for 0x1001, write_mask = 0b0010, etc...
+    input  wire [`RAM_ADDR_WIDTH-1:0] w_addr, // bytes alignment
+    input  wire [`DATA_WIDTH-1:0]     w_dat,
+    input  wire                       w_enb,
+    input  wire [3:0]                 byte_enb, // mask indicating which byte from the word to edit:
+                                                // Example:
+                                                // to write the least significant byte of a word at address 0x1000
+                                                // set write_enb = 0b0001
+                                                // for 0x1001, write_mask = 0b0010, etc...
     // Read port inputs
-    input  wire [$clog2(`I_BRAM_DEPTH) + $clog2(`BYTES_PER_WORD) - 1 :0] r_addr,
-    input  wire                                                          r_enb,
+    input  wire [`RAM_ADDR_WIDTH-1:0] r_addr,
+    input  wire                       r_enb,
     // Outputs
-    output reg  [`DATA_WIDTH-1:0]                                        r_dat,
+    output reg  [`DATA_WIDTH-1:0]     r_dat,
     // Debug read port
-    input  wire [$clog2(`I_BRAM_DEPTH) + $clog2(`BYTES_PER_WORD) - 1 :0] debug_addr,
-    output wire [31:0]                                                   debug_data
+    input  wire [`RAM_ADDR_WIDTH-1:0] debug_addr,
+    output wire [31:0]                debug_data
 );
 
-    reg [`DATA_WIDTH-1:0] mem [0:`I_BRAM_DEPTH-1];
-    
+    reg [`DATA_WIDTH-1:0] mem [`I_BRAM_DEPTH];
+
     integer i;
     always @(posedge clk) begin
         if (rst) begin
