@@ -321,10 +321,10 @@ module i_type_alu_addi_tb(
         #10;
         
         // Loading data into data BRAM
-        $readmemh({`RISCV_PROGRAMS, "i_type/addi_instruction_test_data.hex"}, init_mem_data);
+        $readmemh({`RISCV_PROGRAMS, "i_alu_type/addi_instruction_test_data.hex"}, init_mem_data);
         // Loading program into instruction BRAM
         // $readmemh("beq_bne_instructions_test.new.hex", init_mem_instr);
-        $readmemh({`RISCV_PROGRAMS, "i_type/addi_instruction_test.new.hex"}, init_mem_instr);
+        $readmemh({`RISCV_PROGRAMS, "i_alu_type/addi_instruction_test.new.hex"}, init_mem_instr);
         
         // Deassert reset and initialize data BRAM
         rst = 1'b0; 

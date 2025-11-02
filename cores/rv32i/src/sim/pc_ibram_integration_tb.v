@@ -78,6 +78,7 @@ module pc_ibram_integration_tb(
         .w_addr(w_addr),
         .w_dat(w_dat),
         .w_enb(w_enb),
+        .byte_enb(4'b1111),
         // Read ports inputs
         .r_addr(pc_out),
         .r_enb(r_enb),
@@ -108,7 +109,7 @@ module pc_ibram_integration_tb(
         #10;
         
         // Load .hex file into init_mem
-        $readmemh("add_registers.new.hex", init_mem);
+        $readmemh({`RISCV_PROGRAMS, "r_type/add_registers.new.hex"}, init_mem);
         
         // Deassert reset and initialize BRAM
         rst = 1'b0; 
