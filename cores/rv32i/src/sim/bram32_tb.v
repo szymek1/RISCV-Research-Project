@@ -59,6 +59,7 @@ module bram32_tb(
         .w_addr(w_addr),
         .w_dat(w_dat),
         .w_enb(w_enb),
+        // TODO missing byte_enb
         // Read ports inputs
         .r_addr(r_addr),
         .r_enb(r_enb),
@@ -88,7 +89,7 @@ module bram32_tb(
         r_addr = 32'h0;
         
         // Load .hex file into init_mem
-        $readmemh("add_registers.new.hex", init_mem);
+        $readmemh({`RISCV_PROGRAMS, "r_type/add_registers.new.hex"}, init_mem);
         
         // Deassert reset and initialize BRAM
         rst = 1'b0; 

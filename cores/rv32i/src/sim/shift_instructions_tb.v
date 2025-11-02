@@ -117,7 +117,7 @@ module shift_instructions_tb(
         .alu_src(alu_src),
         .reg_write(reg_write),
         .wrt_back_src(wrt_back_src),
-        .second_u_type_add_src(second_u_type_add_src)
+        .second_add_src(second_u_type_add_src)
     );
     
     // Register file

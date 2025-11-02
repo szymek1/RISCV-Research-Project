@@ -57,8 +57,7 @@ module self_dep_add_hazard_trigger_tb(
         .stall(pc_stall),
         .pc_select(1'b0),
         .pc_in(`BOOT_ADDR),
-        .pc_out(pc_out),
-        .pc_next()
+        .pc_out(pc_out)
     );
     
     wire [`DATA_WIDTH-1:0] instruction;
@@ -69,6 +68,7 @@ module self_dep_add_hazard_trigger_tb(
         .w_addr(i_w_addr),
         .w_dat(i_w_dat),
         .w_enb(i_w_enb),
+        .byte_enb(4'b1111),
         // Read ports inputs
         .r_addr(pc_out),
         .r_enb(i_r_enb),
@@ -186,6 +186,7 @@ module self_dep_add_hazard_trigger_tb(
         .w_addr(d_bram_init_done ? alu_results : d_w_addr),
         .w_dat(d_bram_init_done  ? rs2         : d_w_dat),
         .w_enb(d_bram_init_done  ? mem_write   : d_w_enb),
+        .byte_enb(4'b1111),
         // Read ports inputs
         .r_addr(alu_results),
         .r_enb(mem_read), 
@@ -250,9 +251,9 @@ module self_dep_add_hazard_trigger_tb(
         #10;
         
         // Loading data into data BRAM
-        $readmemh("self_dep_test_data.hex", init_mem_data);
+        $readmemh({`RISCV_PROGRAMS, "hazards/self_dep_test_data.hex"}, init_mem_data);
         // Loading program into instruction BRAM
-        $readmemh("self_dep_add_test.new.hex", init_mem_instr);
+        $readmemh({`RISCV_PROGRAMS, "hazards/self_dep_add_test.new.hex"}, init_mem_instr);
         
         // Deassert reset and initialize data BRAM
         rst = 1'b0; 

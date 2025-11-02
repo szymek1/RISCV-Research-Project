@@ -35,7 +35,7 @@ module byte_reader (
     reg [`DATA_WIDTH-1:0] masked_data;
     reg [`DATA_WIDTH-1:0] shifted_data;
 
-    // masking data according to bye mask
+    // masking data according to byte mask
     integer i;
     always @(*) begin
         for (i = 0; i < 4; i = i + 1) begin
