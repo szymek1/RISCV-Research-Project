@@ -118,8 +118,6 @@ module riscv_cpu(
     wire [`REG_ADDR_WIDTH-1:0] rs2_addr;
     assign rs2_addr =          instruction[24:20];
 
-    wire                       rd_enbl;
-
     wire [`DATA_WIDTH-1:0]     rs1;
     wire [`DATA_WIDTH-1:0]     rs2;
 

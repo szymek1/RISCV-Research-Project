@@ -69,12 +69,12 @@ module full_cpu();
 
     task automatic display_results;
         begin
-            $display("Time=%0t | pc=%h |\n instr=%h | op=%b | r_reg=%b |\n rs1_addr=%h | rs2_addr=%h |\n rs1=%h | rs2=%h |\n d_bram_out=%h",
+            $display("Time=%0t | pc=%h |\n instr=%h | op=%b | rd_addr=%b |\n rs1_addr=%h | rs2_addr=%h |\n rs1=%h | rs2=%h |\n d_bram_out=%h",
                      $time,
                      cpu.pc_out,
                      cpu.instruction,
                      cpu.opcode,
-                     cpu.rd_enbl,
+                     cpu.wrt_addr,
                      cpu.rs1_addr,
                      cpu.rs2_addr,
                      cpu.rs1,
