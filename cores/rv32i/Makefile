@@ -116,6 +116,9 @@ $(SIM_DIR)/component_testbenches/%/sim_output.txt: $(VVP_DIR)/component_testbenc
 	@mkdir -p $(@D)
 	@echo "Running testbench \"$*\""
 	@cd $(@D) && vvp $< > $@ 2>&1
+	@if grep -q "\[ERROR\]" "$@"; then \
+		echo "  Error (see $@)"; \
+	fi
 
 # Run program on full_cpu
 $(SIM_DIR)/progs/%/sim_output.txt: $(FULL_CPU_VVP) $(DATA_DIR)/%/program.hex $(DATA_DIR)/%/memory.hex $(DATA_DIR)/%/expected_registers.hex $(DATA_DIR)/%/expected_memory.hex
