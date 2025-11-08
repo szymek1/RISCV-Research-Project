@@ -51,9 +51,9 @@ module byte_reader (
     // shifting data
     always @(*) begin
         case (func3)
-            `F3_LW                : shifted_data = masked_data;
+            `F3_WORD                 : shifted_data = masked_data;
 
-            `F3_BYTE, `F3_LBU     : begin // lb, lbu
+            `F3_BYTE, `F3_BYTE_U     : begin // lb, lbu
                 case (byte_mask)
                     4'b0001: shifted_data = masked_data;
                     4'b0010: shifted_data = masked_data >> 8;
@@ -62,7 +62,7 @@ module byte_reader (
                 endcase
             end
 
-            `F3_HALF_WORD, `F3_LHU: begin // lh, lhu
+            `F3_HALF_WORD, `F3_HALF_WORD_U: begin // lh, lhu
                 case (byte_mask)
                     4'b0011: shifted_data = masked_data;
                     4'b1100: shifted_data = masked_data >> 16;
@@ -73,10 +73,10 @@ module byte_reader (
 
     // sign extending
     always @(*) begin
-        case (func3) 
-            `F3_LW                : wb_data = shifted_data; // lw
-            `F3_BYTE, `F3_LBU     : wb_data = sign_ext ? {{24{shifted_data[7]}},shifted_data[7:0]}   : shifted_data; // lb, lbu
-            `F3_HALF_WORD, `F3_LHU: wb_data = sign_ext ? {{16{shifted_data[15]}},shifted_data[15:0]} : shifted_data; // lh, lhu
+        case (func3)
+            `F3_WORD:                       wb_data = shifted_data; // lw
+            `F3_BYTE, `F3_BYTE_U:           wb_data = sign_ext ? {{24{shifted_data[7]}},shifted_data[7:0]}   : shifted_data; // lb, lbu
+            `F3_HALF_WORD, `F3_HALF_WORD_U: wb_data = sign_ext ? {{16{shifted_data[15]}},shifted_data[15:0]} : shifted_data; // lh, lhu
         endcase
         valid = | byte_mask;
     end

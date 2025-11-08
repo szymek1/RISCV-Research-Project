@@ -69,17 +69,26 @@ module full_cpu();
 
     task automatic display_results;
         begin
-            $display("Time=%0t | pc=%h |\n instr=%h | op=%b | rd_addr=%b |\n rs1_addr=%h | rs2_addr=%h |\n rs1=%h | rs2=%h |\n d_bram_out=%h",
-                     $time,
-                     cpu.pc_out,
-                     cpu.instruction,
-                     cpu.opcode,
-                     cpu.wrt_addr,
-                     cpu.rs1_addr,
-                     cpu.rs2_addr,
-                     cpu.rs1,
-                     cpu.rs2,
-                     cpu.data_bram_output);
+            $display("Time=%0t, pc=%h, instr=%h",
+                $time, cpu.pc, cpu.instruction);
+            $display("  Decode");
+            $display("   op=%b, func3=%b, func7=%b",
+                cpu.DECODE.opcode, cpu.DECODE.func3, cpu.DECODE.func7);
+            $display("   rd_addr=%h, rs1_addr=%h, rs2_addr=%h, imm=%h",
+                cpu.rd_addr, cpu.rs1_addr, cpu.rs2_addr, cpu.immediate);
+            $display("  ALU");
+            $display("   input: rs1=%h, rs2=%h, alu_ctrl=%b",
+                cpu.rs1, cpu.rs2, cpu.alu_ctrl);
+            $display("   output: alu_result=%h",
+                cpu.alu_result);
+            $display("  Memory");
+            $display("   input: use_mem=%h, d_r_addr=%h, d_w_addr=%h, d_w_dat=%h",
+                cpu.use_mem, cpu.d_r_addr, cpu.d_w_addr, cpu.d_w_dat);
+            $display("   output: d_r_dat=%h",
+                cpu.d_r_dat);
+            $display("  Write back");
+            $display("   write_back_data=%h",
+                cpu.write_back_data);
         end
     endtask
 
@@ -104,6 +113,11 @@ module full_cpu();
     initial begin
         $dumpfile("full_cpu_tb.vcd");
         $dumpvars(0, full_cpu);
+        $dumpvars(0, cpu.i_mem.mem[0]);
+        $dumpvars(0, cpu.d_mem.mem[0]);
+        $dumpvars(0, cpu.d_mem.mem[1]);
+        $dumpvars(0, cpu.d_mem.mem[2]);
+        $dumpvars(0, cpu.d_mem.mem[3]);
         $dumpvars(0, expected_memory[0]);
         $dumpvars(0, cpu.REGFILE.registers[5]);
         $dumpvars(0, cpu.REGFILE.registers[6]);
@@ -118,6 +132,8 @@ module full_cpu();
         rst              = 1'b1;
         pc_stall         = 1'b1;
         #10;
+        // De-assert reset
+        rst = 1'b0;
 
         #10
         $value$plusargs ("data=%s", data_folder);
@@ -127,19 +143,18 @@ module full_cpu();
         $readmemh({data_folder, "/expected_registers.hex"}, expected_registers);
         $readmemh({data_folder, "/expected_memory.hex"}, expected_memory);
 
-        // De-assert reset
-        rst = 1'b0;
         #10;
 
         // Execute program
         $display("Executing program...");
+        // De-assert pc_stall
         pc_stall = 1'b0;
         #5;
         pc_last = -1;
         total_steps = 0;
-        while (cpu.pc_out != pc_last && total_steps < 1000) begin
+        while (cpu.pc != pc_last && total_steps < 1000) begin
             display_results();
-            pc_last = cpu.pc_out;
+            pc_last = cpu.pc;
             total_steps = total_steps + 1;
             #10;
         end

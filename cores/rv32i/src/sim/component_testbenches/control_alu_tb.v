@@ -146,7 +146,7 @@ module control_alu_tb(
         // Test 2: Sign extension with positive immediate
         #10;
         imm_src  = 12'h07ff;            // +2047
-        opcode = `LD_TYPE_OP;
+        opcode = `OPCODE_LOAD;
         src1     = 32'h1000;           // Base address
         #10;
         display_results();
