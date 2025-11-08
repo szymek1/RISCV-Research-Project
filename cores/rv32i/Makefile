@@ -122,6 +122,9 @@ $(SIM_DIR)/progs/%/sim_output.txt: $(FULL_CPU_VVP) $(DATA_DIR)/%/program.hex $(D
 	@mkdir -p $(@D)
 	@echo "Running prog \"$*\""
 	@cd $(@D) && vvp $< +data=$(DATA_DIR)/$* > $@ 2>&1
+	@if grep -q "\[ERROR\]" "$@"; then \
+		echo "  Error (see $@)"; \
+	fi
 
 #
 # ================ VIVADO ================

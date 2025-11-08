@@ -12,8 +12,8 @@ _start:
     sll x8, x5, x6          # x8 = 0x000000A8 | op= 011 0011    
     slli x9, x5, 2          # x9 = 0x000000A8 | op= 001 0011
 
-    srl x10, x5, x6         # x10 = 0x0000000A| op= 011 0011
-    srli x11, x5, 2         # x11 = 0x0000000A| op= 001 0011
+    srl x10, x7, x6         # x10 = 0x3FFFFFF5| op= 011 0011
+    srli x11, x7, 2         # x11 = 0x3FFFFFF5| op= 001 0011
 
     sra x12, x7, x6         # x12 = 0xFFFFFFF5| op= 011 0011
     srai x13, x7, 2         # x13 = 0xFFFFFFF5| op= 001 0011
