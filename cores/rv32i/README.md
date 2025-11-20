@@ -77,23 +77,20 @@ The test is automatically discovered by the Makefile.
 
 ### Running simulation and build
 
-Project's structure and build system follows the template from my base [FPGA project](https://github.com/szymek1/FPGA-TCL-Makefile-template).
+The simulation environment can be either Vivado or [IVerilog](https://github.com/steveicarus/iverilog).
 
-Due to that every source file should be placed inside: ```src/hdl/```. While every testbench inside: ```src/sim/```.
+In order to compile and run simulation using IVerilog (faster way) execute:
 
-To run a simulation execute:
+- for RISC-V instructions: ```make instruction_type/instruction``` , like: ```make b_type/beq```
+- for core's component: ```make component_tb``` , like: ```make pc_tb```
 
-```make sim_sel TB=module_tb``` - single, selected testbench
+In order to use Vivado simulator execute:
 
-or
+- for running only one, specific testbench: ```make sim-vivado TB=testbench_name```
+- for running multiple specific testbenches: ```make sim-vivado TB="tb_1 tb_2...```
+- for running all avaliable testbenches: ```make sim-vivado```
 
-```make sim_sel TB="module1_tb module2_tb ..."``` - multiple selected testbenches
-
-or
-
-```make sim_all``` - all testbenches which are inside ```src/sim/```
-
-In either case results will be saved to ```simulation/waveforms``` and logs of the successful/unsuccessful runs will be saved to ```log/```.
+In either case the results (waveforms and output file) will be solved inside ```simulation/``` directory.
 
 This project currently doesn't synthesize, however in order to build it execute:
 ```make bit```
