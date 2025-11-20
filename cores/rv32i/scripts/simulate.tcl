@@ -33,7 +33,7 @@ if {$language eq "verilog"} {
 }
 
 # Prepare output directory
-file mkdir $wave_dir
+file mkdir $wave_dir/component_testbenches
 
 # Find design and testbench source files
 # Determine design files: directory (sim_all) or file list (sim_sel)
@@ -41,7 +41,7 @@ if {[string first " " $compile_src] == -1} {
     # no spaces => treat as hdl_dir (sim_all)
     set hdl_dir      [file normalize $compile_src]
     set design_files [glob -nocomplain "$hdl_dir/*.$lang"]
-    set all_tb_files [glob -nocomplain "$sim_src_dir/*.$lang"]
+    set all_tb_files [glob -nocomplain "$sim_src_dir/component_testbenches/*.$lang"]
 } else {
     # spaces => treat as file list (sim_sel)
     set design_files [split $compile_src " "]
@@ -54,7 +54,7 @@ if {[llength $tb_names] == 0} {
 } else {
     foreach tb_name $tb_names {
         set base_name [file rootname $tb_name]
-        set tb_file "$sim_src_dir/$base_name.$lang"
+        set tb_file "$sim_src_dir/component_testbenches/$base_name.$lang"
         if {[file exists $tb_file]} {
             lappend tb_files $tb_file
         } else {
@@ -75,7 +75,7 @@ foreach tb_file $tb_files {
     puts "Design files to compile: $design_files"
 
     # Per-testbench output directory
-    set tb_dir "$wave_dir/$tb_mod"
+    set tb_dir "$wave_dir/component_testbenches/$tb_mod"
     file delete -force $tb_dir
     file mkdir $tb_dir
     cd $tb_dir

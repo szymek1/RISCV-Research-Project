@@ -24,9 +24,25 @@
 
 module riscv_cpu(
     input clk,
-    input rst
-    );
-    
+    input rst,
+
+    input pc_stall,
+
+    // connections to instruction RAM
+    output [`RAM_ADDR_WIDTH-1:0] i_r_addr,
+    output                       i_r_enb,
+    input  [`DATA_WIDTH-1:0]     i_r_dat,
+
+    // connections to data RAM
+    output [`RAM_ADDR_WIDTH-1:0] d_w_addr,
+    output [`DATA_WIDTH-1:0]     d_w_dat,
+    output                       d_w_enb,
+    output [3:0]                 d_w_byte_enb,
+    output [`RAM_ADDR_WIDTH-1:0] d_r_addr,
+    output                       d_r_enb,
+    input  [`DATA_WIDTH-1:0]     d_r_dat
+);
+
     // =====   Fetch stage   =====
     wire [`DATA_WIDTH-1:0]  pc_out;
     wire [`DATA_WIDTH-1:0]  pc_plus_4;       // used for returning from a jump
@@ -44,36 +60,26 @@ module riscv_cpu(
         .pc_out(pc_out),
         .pc_plus_4(pc_plus_4)
     );
-    
+
+    // instruction RAM wiring
     wire [`DATA_WIDTH-1:0] instruction;
-    wire [3:0]             i_w_byte_enb;
-    bram32 I_MEM( // Instruction BRAM
-        .clk(clk),
-        .rst(rst),
-        // Write ports inputs
-        .w_addr(i_w_addr),
-        .w_dat(i_w_dat),
-        .w_enb(i_w_enb),
-        .byte_enb(i_w_byte_enb),
-        // Read ports inputs
-        .r_addr(pc_out),
-        .r_enb(i_r_enb),
-        // Outputs
-        .r_dat(instruction)
-    );
+    assign i_r_addr = pc_out[`RAM_ADDR_WIDTH-1:0];
+    assign i_r_enb = 1'b1; // always enable reading
+    assign instruction = i_r_dat;
+
     // =====   Fetch stage   =====
     // =====   Decode stage   =====
     wire                      alu_zero;
     wire                      alu_last_bit;
     wire [`OPCODE_WIDTH-1:0]  opcode;
     assign opcode =           instruction[6:0];
-    
+
     wire [`FUNC3_WIDTH-1:0]   func3;
     assign func3 =            instruction[14:12];
-    
+
     wire [`FUNC7_WIDTH-1:0]   func7;
     assign func7 = instruction[`DATA_WIDTH-1:25];
-    
+
     // Control module outputs
     wire [2:0]                imm_src;
     wire                      mem_read;
@@ -84,7 +90,7 @@ module riscv_cpu(
     wire                      reg_write;
     wire [1:0]                wrt_back_src;
     wire [1:0]                second_add_src;
-    
+
     control CONTROL(
         // .clk(clk),
         .rst(rst),
@@ -104,19 +110,17 @@ module riscv_cpu(
         .wrt_back_src(wrt_back_src),
         .second_add_src(second_add_src)
     );
-    
+
     // Register file
     wire [`REG_ADDR_WIDTH-1:0] rs1_addr;
     assign rs1_addr =          instruction[19:15];
-    
+
     wire [`REG_ADDR_WIDTH-1:0] rs2_addr;
     assign rs2_addr =          instruction[24:20];
-    
-    wire                       rd_enbl;
-    
+
     wire [`DATA_WIDTH-1:0]     rs1;
     wire [`DATA_WIDTH-1:0]     rs2;
-    
+
     wire [`REG_ADDR_WIDTH-1:0] wrt_addr;
     assign wrt_addr =          instruction[11:7];
     reg [`DATA_WIDTH-1:0]      wrt_dat; // connect with data memory module
@@ -125,7 +129,7 @@ module riscv_cpu(
     wire [`DATA_WIDTH-1:0] mem_wb_data; // from byte_reader
     wire                   mem_valid;   // from byte_reader
     reg                    wb_valid;    // has to be set high after every write back operation
-    
+
     // Block dedicated to deciding what should be the output to write back to register file.
     // It changes accordingly to a current instruction: reading from data BRAM, register-to-register
     // or saving pc before the jump.
@@ -151,7 +155,7 @@ module riscv_cpu(
             end
         endcase
     end
-    
+
     // Block dedicated U-Type instruction handling.
     // Regfile will be updated with a value either:
     // lui  : immediate 20 bits shifted left by 12
@@ -159,37 +163,37 @@ module riscv_cpu(
     // jalr : sign-extended 12-bit imm12 to the register rs1
     always @(*) begin
         case (second_add_src)
-            `SEC_AS_LUI  : pc_plus_sec_src = immediate;                           // lui
-            `SEC_AS_AUIPC: pc_plus_sec_src = pc_out + immediate;                  // auipc
-            `SEC_AS_JALR : pc_plus_sec_src = (rs1 + immediate) & 32'hFFFFFFFE;    // jalr
-            `SEC_AS_NONE : pc_plus_sec_src = 32'b0;                               // do nothing
+            `SEC_AS_LUI  : pc_plus_sec_src = immediate;
+            `SEC_AS_AUIPC: pc_plus_sec_src = pc_out + immediate;
+            `SEC_AS_JALR : pc_plus_sec_src = (rs1 + immediate) & 32'hFFFFFFFE;
+            `SEC_AS_NONE : pc_plus_sec_src = 32'b0;
         endcase
     end
-    
+
     register_file REGFILE(
         .clk(clk),
         .rst(rst),
-        .read_enable(rd_enbl),
+        .read_enable(1'b1),
         .rs1_addr(rs1_addr),
         .rs2_addr(rs2_addr),
         .rs1(rs1),
         .rs2(rs2),
         .write_enable(reg_write & wb_valid),
         .write_addr(wrt_addr),
-        .write_data(wrt_back_data)                      
+        .write_data(wrt_back_data)
     );
     // =====   Decode stage   =====
     // =====   Execute stage   =====
     // Sign extension
     wire [24:0]                instr_imm;
     assign instr_imm =         instruction[`INSTR_WIDTH-1:7];
-    
+
     sign_extend SIGN_EXTENSION(
         .src(instr_imm),
         .imm_src(imm_src),
         .imm_signed(immediate)
     );
-    
+
     alu ALU(
         .alu_ctrl(alu_ctrl),  // provided by control module
         .alu_src(alu_src),    // provided by control module
@@ -197,8 +201,8 @@ module riscv_cpu(
         .src2(rs2),           // provided by regfile
         .sign_ext(immediate), // provided by sign_extend
         .results(alu_results),
-        .zero(alu_zero),    
-        .res_last_bit(alu_last_bit)               
+        .zero(alu_zero),
+        .res_last_bit(alu_last_bit)
     );
 
     wire [3:0]             byte_enb;
@@ -213,20 +217,15 @@ module riscv_cpu(
 
     // =====   Execute stage   =====
     // =====   Memory stage   =====
-    bram32 D_MEM( // Data BRAM
-        .clk(clk),
-        .rst(rst),
-        // Write ports inputs
-        .w_addr({alu_results[31:2], 2'b00}),
-        .w_dat(mem_write_data),
-        .w_enb(mem_write),
-        .byte_enb(byte_enb),
-        // Read ports inputs
-        .r_addr(alu_results),
-        .r_enb(mem_read),
-        // Outputs
-        .r_dat(data_bram_output)
-    );
+
+    // data RAM wiring
+    assign d_w_addr = {alu_results[`RAM_ADDR_WIDTH-1:2], 2'b00};
+    assign d_w_dat = mem_write_data;
+    assign d_w_enb = mem_write;
+    assign d_w_byte_enb = byte_enb; // from load store decoder
+    assign d_r_addr = alu_results[`RAM_ADDR_WIDTH-1:0];
+    assign d_r_enb = mem_read;
+    assign data_bram_output = d_r_dat;
 
     byte_reader BYTE_READER(
         .mem_data(data_bram_output),
@@ -236,5 +235,5 @@ module riscv_cpu(
         .valid(mem_valid)
     );
     // =====   Memory stage   =====
-    
+
 endmodule
