@@ -1,40 +1,29 @@
-# Simple RV32I program using J-type, R-type, S-type and I-type instructions
-# Executes load instructions, jumps to a subroutine and performs ALU operations and stores the data.
+# Simple RV32I program using to test the JAL instruction
+# Uses store instructions
 
 .text
 .global _start
 
 _start:
-    lw x5, 0(x10)            # x5 = mem[0x0000] = 0x00000004
-    lw x6, 4(x10)            # x6 = mem[0x0004] = 0x00000003
-    sw x6, 0xC(x0)
-
-    jal x1, target           # Jump to target, x1 = pc + 4
-    lw x7, 8(x10)            # x7 = mem[0x0008] = 0x00000008
+    nop
+    jal x1, target1           # Jump to target1, x1 = pc + 4
     j loop
 
-target:
-    nop                      # Placeholder at target
-    j return_point           # Return to after jal
+target2:
+    sw x2, 0x08(x0)           # show we have been here and pc+4 was saved correctly
+    j loop
 
-return_point:
-    sw x5, 0xA(x0)           # Store x5 after return
-    jal x1, far_target       # Jump further
+test2:
+    li x7, 42
+    sw x7, 0x04(x0)           # show we have been here
+    jal x2, target2           # Jump to target2, x2 = pc + 4
     nop
     nop
-    jal x1, back             # Jump back
-    j end
+    j loop
 
-far_target:
-    nop
-    j return_point
-
-back:
-    nop
-    j return_point
+target1:
+    sw x1, 0x00(x0)           # show we have been here and pc+4 was saved correctly
+    j test2
 
 loop:
     j loop
-
-end:
-    j end

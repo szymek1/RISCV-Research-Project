@@ -23,40 +23,49 @@
 
 
 module alu(
-    input  wire [3:0]              alu_ctrl,    // 2-bit long alu opcode provided by the main control module
-    input  wire                    alu_src,     // 1-bit indicating if the second source comes from the regfile or sign_extend module
-    input  wire [`INSTR_WIDTH-1:0] src1,        // 1st source (from regfile)
-    input  wire [`INSTR_WIDTH-1:0] src2,        // 2nd source (from regfile)
-    input  wire [`INSTR_WIDTH-1:0] sign_ext,    // signe_extend module input (selected if alu_src is high) 
-    output reg  [`INSTR_WIDTH-1:0] results,  
-    output wire                    zero,        // comparison results (for branch evaluation)
-    output wire                    res_last_bit // set to 1, if the LSB of the result is 1
-    // Debug outputs
-    // output wire [4:0]              shamt
-    );
-    
-    wire [`INSTR_WIDTH-1:0] src2_internal = alu_src ? sign_ext : src2;
-    wire [4:0]              shamt         = src2_internal[4:0];
+    input  wire [`ALU_CTRL_WIDTH-1:0] alu_ctrl,     // alu opcode provided by the instr decode
+    input  wire [`INSTR_WIDTH-1:0]    src1,         // 1st source
+    input  wire [`INSTR_WIDTH-1:0]    src2,         // 2nd source
+    output reg  [`INSTR_WIDTH-1:0]    result,
+    output wire                       take_branch // comparison result (for branch evaluation)
+);
 
-    // For debug purposes
-    // assign shamt = src2_internal[4:0];
+    wire [4:0] shamt         = src2[4:0];
+
+    wire eq  = src1 == src2;
+    wire lt  = $signed(src1) < $signed(src2);
+    wire ltu = src1 < src2;
+
     always @(*) begin
-         case (alu_ctrl)            
-            `ADD          : results = src1 + src2_internal;
-            `SUBTRACT     : results = src1 - src2_internal;
-            `ALU_AND      : results = src1 & src2_internal;
-            `ALU_OR       : results = src1 | src2_internal;
-            `ALU_XOR      : results = src1 ^ src2_internal;
-            `ALU_SLTI_CMP : results = {31'b0, $signed(src1) < $signed(src2_internal)};
-            `ALU_SLTIU_CMP: results = {31'b0, src1 < src2_internal};
-            `ALU_SLL      : results = src1 << shamt;
-            `ALU_SRL      : results = src1 >> shamt;
-            `ALU_SRA      : results = $signed(src1) >>> shamt;
-            default       : results = 32'h0;
-         endcase
+        if (alu_ctrl[4] == 1'b0) begin // OP, OP-IMM
+            case (alu_ctrl[2:0])
+                `F3_ADD_SUB:
+                    if (!alu_ctrl[3]) result = src1 + src2;
+                    else              result = src1 - src2;
+                `F3_AND:              result = src1 & src2;
+                `F3_OR:               result = src1 | src2;
+                `F3_XOR:              result = src1 ^ src2;
+                `F3_SLTI:             result = {31'b0, lt};
+                `F3_SLTIU:            result = {31'b0, ltu};
+                `F3_SLL:              result = src1 << shamt;
+                `F3_SRL_SRA:
+                    if (!alu_ctrl[3]) result = src1 >> shamt;
+                    else              result = $signed(src1) >>> shamt;
+                default:              result = 32'h0;
+            endcase
+        end else if (alu_ctrl[3] == 1'b0) begin // BRANCH
+            case (alu_ctrl[2:0])
+                `F3_BEQ:              result = {31'b0,  eq};
+                `F3_BNE:              result = {31'b0, ~eq};
+                `F3_BLT:              result = {31'b0,  lt};
+                `F3_BGE:              result = {31'b0, ~lt};
+                `F3_BLTU:             result = {31'b0,  ltu};
+                `F3_BGEU:             result = {31'b0, ~ltu};
+                default:              result = 32'h0;
+            endcase
+        end else                      result = 32'h0;
     end
-    
-    assign zero         = (results == 32'h0) ? 1'b1 : 1'b0; // set high if zero
-    assign res_last_bit = results[0];
-    
+
+    assign take_branch = result[0];
+
 endmodule
