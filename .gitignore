@@ -17,6 +17,7 @@ log/
 simulation/
 simulation/
 proj/
+soc/RISC_V_softcore/
 
 # for Xilinx Vivado|ISE
 .Xil/
