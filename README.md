@@ -46,4 +46,4 @@ The project's tree in the simplified form form looks as follows:
 
 * ```cores```: contains HDL implementations of soft-cores to verify + any build system they use
 * ```masterpc```: Master PC application
-* ```soc```: ARM Cortex application
+* ```soc```: ARM Cortex application + full implementation including the selected core
