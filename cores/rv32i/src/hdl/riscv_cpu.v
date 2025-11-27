@@ -40,8 +40,23 @@ module riscv_cpu(
     output [3:0]                 d_w_byte_enb,
     output [`RAM_ADDR_WIDTH-1:0] d_r_addr,
     output                       d_r_enb,
-    input  [`DATA_WIDTH-1:0]     d_r_dat
+    input  [`DATA_WIDTH-1:0]     d_r_dat,
+
+    // connections to SOC Control Module
+    output [`DATA_WIDTH-1:0]     cm_read_regfile_dat,
+    input                        cm_cpu_stop,                // stops an entire core to perform read/write activity
+    input  [`REG_ADDR_WIDTH-1:0] cm_read_write_regfile_addr, // used for both activities by the external module
+    input  [`DATA_WIDTH-1:0]     cm_write_regfile_dat
 );
+
+    // =====   CPU Control   =====
+    // =====   start/stop    =====
+    // When the SOC Control Module wants to allow Fault Injection Module
+    // to inject faults or when the SOC Control Module wants to dump the
+    // register file it needs to stop the core to avoid operating on the register file
+    // while the core itself is using it
+    wire gated_clk;
+    assign gated_clk = clk & ~cm_cpu_stop;
 
     // =====   Fetch stage   =====
     reg  [`DATA_WIDTH-1:0]     pc;
@@ -57,7 +72,7 @@ module riscv_cpu(
     wire                       is_jalr;
     wire                       is_branch;
 
-    always @(posedge clk or posedge rst) begin
+    always @(posedge gated_clk or posedge rst) begin
         if (rst == 1'b1) begin
             pc <= `BOOT_ADDR;
         end else if (!pc_stall) begin
@@ -119,7 +134,7 @@ module riscv_cpu(
     reg  [`DATA_WIDTH-1:0]     write_back_data;
 
     register_file REGFILE(
-        .clk(clk),
+        .clk(gated_clk),
         .rst(rst),
         .read_enable(1'b1),
         .rs1_addr(rs1_addr),
