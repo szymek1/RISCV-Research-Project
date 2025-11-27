@@ -133,17 +133,22 @@ module riscv_cpu(
 
     reg  [`DATA_WIDTH-1:0]     write_back_data;
 
+    // In case SOC Control Module wants to
+    // - read register file: it will use rs1_addr and rs1 fields given cm_cpu_stop == 1
+    // - write register file: it will use write_enable, write_addr, write_data fields given cm_cpu_stop == 1
+    // This module is unaffected by gating done to the input clock signal as it has to operate
+    // even when the rest of the clock is put to halt
     register_file REGFILE(
         .clk(clk), // this is the only module which receives the clock signal regardless cm_cpu_stop flag
         .rst(rst), 
         .read_enable(1'b1),
-        .rs1_addr(rs1_addr),
+        .rs1_addr(!cm_cpu_stop   ? rs1_addr        : cm_read_write_regfile_addr),
         .rs2_addr(rs2_addr),
-        .rs1(rs1),
+        .rs1(!cm_cpu_stop        ? rs1             : cm_read_regfile_dat),
         .rs2(rs2),
-        .write_enable(do_write_back),
-        .write_addr(rd_addr),
-        .write_data(write_back_data)
+        .write_enable(do_write_back || cm_cpu_stop),
+        .write_addr(!cm_cpu_stop ? rd_addr         : cm_read_write_regfile_addr),
+        .write_data(!cm_cpu_stop ? write_back_data : cm_write_regfile_dat)
     );
 
     wire [`DATA_WIDTH-1:0]     mem_wb_data; // from byte_reader
