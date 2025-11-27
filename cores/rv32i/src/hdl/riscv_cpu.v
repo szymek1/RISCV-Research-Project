@@ -134,8 +134,8 @@ module riscv_cpu(
     reg  [`DATA_WIDTH-1:0]     write_back_data;
 
     register_file REGFILE(
-        .clk(gated_clk),
-        .rst(rst),
+        .clk(clk), // this is the only module which receives the clock signal regardless cm_cpu_stop flag
+        .rst(rst), 
         .read_enable(1'b1),
         .rs1_addr(rs1_addr),
         .rs2_addr(rs2_addr),
