@@ -45,6 +45,7 @@ module riscv_cpu(
     // connections to SOC Control Module
     output [`DATA_WIDTH-1:0]     cm_read_regfile_dat,
     input                        cm_cpu_stop,                // stops an entire core to perform read/write activity
+    input                        cm_regfile_we,
     input  [`REG_ADDR_WIDTH-1:0] cm_read_write_regfile_addr, // used for both activities by the external module
     input  [`DATA_WIDTH-1:0]     cm_write_regfile_dat
 );
@@ -129,6 +130,7 @@ module riscv_cpu(
     // Register file
 
     wire [`DATA_WIDTH-1:0]     rs1;
+    wire [`DATA_WIDTH-1:0]     rf_rs1_out;
     wire [`DATA_WIDTH-1:0]     rs2;
 
     reg  [`DATA_WIDTH-1:0]     write_back_data;
@@ -144,12 +146,15 @@ module riscv_cpu(
         .read_enable(1'b1),
         .rs1_addr(!cm_cpu_stop   ? rs1_addr        : cm_read_write_regfile_addr),
         .rs2_addr(rs2_addr),
-        .rs1(!cm_cpu_stop        ? rs1             : cm_read_regfile_dat),
+        .rs1(rf_rs1_out),
         .rs2(rs2),
-        .write_enable(do_write_back || cm_cpu_stop),
+        .write_enable(do_write_back || (cm_cpu_stop && cm_regfile_we)),
         .write_addr(!cm_cpu_stop ? rd_addr         : cm_read_write_regfile_addr),
         .write_data(!cm_cpu_stop ? write_back_data : cm_write_regfile_dat)
     );
+
+    assign rs1                 = rf_rs1_out;
+    assign cm_read_regfile_dat = rf_rs1_out;
 
     wire [`DATA_WIDTH-1:0]     mem_wb_data; // from byte_reader
     wire                       mem_valid;   // from byte_reader

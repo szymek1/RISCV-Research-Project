@@ -38,6 +38,7 @@ module soc_control (
 
     // connections to RISC-V core
     output                                   cm_cpu_stop,
+    output                                   cm_regfile_we,
     output [`DATA_WIDTH-1:0]                 cm_write_regfile_dat,
     input  [`DATA_WIDTH-1:0]                 cm_read_regfile_dat,
     input  [`REG_ADDR_WIDTH-1:0]             cm_read_write_regfile_addr,
@@ -110,46 +111,55 @@ module soc_control (
     assign S_AXI_RDATA   = S_AXI_RDATA_;
 
     // Core stalling logic
-    localparam CPU_RUNNING = 1'b0;
-    localparam CPU_STOPPED = 1'b1;
-    reg        cpu_state   = CPU_RUNNING;
+    localparam CPU_RUNNING    = 2'b00;
+    localparam CPU_STOP_WAIT  = 2'b01; // allow register file to settle in order to avoid latching on old data
+    localparam CPU_STOPPED    = 2'b10;
+    reg        cpu_state      = CPU_RUNNING;
 
-    reg S_AXI_ARVALID_;
-    reg S_AXI_AWVALID_;
+    wire       read_complete  = S_AXI_RVALID_ && S_AXI_RREADY;
+    wire       write_complete = S_AXI_BVALID_ && S_AXI_BREADY;
 
     always @(posedge clk or negedge rst) begin
         if (rst) begin
             cpu_state <= CPU_RUNNING;
         end else begin
             case (cpu_state)
-                CPU_RUNNING : cpu_state <= (S_AXI_ARVALID  || S_AXI_AWVALID)  ? CPU_RUNNING : CPU_STOPPED;
-                CPU_STOPPED : cpu_state <= (S_AXI_ARREADY_ || S_AXI_AWREADY_) ? CPU_RUNNING : CPU_STOPPED;
-                default     : cpu_state <= CPU_RUNNING;
+                CPU_RUNNING   : cpu_state <= (S_AXI_ARVALID  || S_AXI_AWVALID)  ? CPU_STOP_WAIT : CPU_STOPPED;
+                CPU_STOP_WAIT : cpu_state <= CPU_STOPPED;
+                CPU_STOPPED   : cpu_state <= (read_complete || write_complete) ? CPU_RUNNING   : CPU_STOPPED;
+                default       : cpu_state <= CPU_RUNNING;
             endcase
         end
     end
     
-    assign cm_cpu_stop = ~cpu_state;
+    assign cm_cpu_stop = (cpu_state == CPU_STOPPED) ? 1'b1 : 1'b0;
 
     // Read process
+    reg is_axi_read;
     always @(posedge clk or negedge rst) begin
         if (rst) begin
-            S_AXI_ARREADY_     <= 1'b1; 
+            is_axi_read        <= 1'b0;
+            S_AXI_ARREADY_     <= 1'b0; 
             S_AXI_RVALID_      <= 1'b0;
-            axi_araddr_latched <= 0;
+            // axi_araddr_latched <= 0;
             S_AXI_RDATA_       <= 0;
             S_AXI_RRESP_       <= `AXI_RESP_OKAY;
         end else begin
-            if (S_AXI_ARVALID && S_AXI_ARREADY_) begin
+            if (S_AXI_ARVALID && !S_AXI_ARREADY_ && !is_axi_read && cpu_state == CPU_STOPPED) begin
+                // Making sure that SOC Control Module managed to stop the CPU
+                S_AXI_ARREADY_ <= 1'b1;
+                is_axi_read    <= 1'b1;
+            end else if (S_AXI_ARVALID && S_AXI_ARREADY_) begin
                 // Address handshake: slave is by default ready so the handshake happends immediately
                 //                    once the master issue the address
-                S_AXI_ARREADY_     <= 1'b0; 
-                axi_araddr_latched <= read_index;             
+                is_axi_read        <= 1'b1;
+                S_AXI_ARREADY_     <= 1'b0;              
                 S_AXI_RVALID_      <= 1'b1;  // data will be valid in the next cycle
                 S_AXI_RRESP_       <= `AXI_RESP_OKAY;
-                S_AXI_RDATA_       <= regfile[read_index];
+                S_AXI_RDATA_       <= cm_read_regfile_dat;
             end else if (S_AXI_RREADY && S_AXI_RVALID_) begin
                 // Transaction complete: master accepts the data
+                is_axi_read        <= 1'b0;
                 S_AXI_RVALID_      <= 1'b0;
                 S_AXI_ARREADY_     <= 1'b1;  // heres ready for the new read transaction
             end
@@ -157,60 +167,65 @@ module soc_control (
     end
 
     // Write process
+    reg is_axi_write;
     always @(posedge clk or negedge rst) begin
         if (rst) begin
-            S_AXI_AWREADY_     <= 1'b1; 
+            is_axi_write       <= 1'b0;
+            S_AXI_AWREADY_     <= 1'b0; 
             S_AXI_WREADY_      <= 1'b0;
             S_AXI_BVALID_      <= 1'b0;
             S_AXI_BRESP_       <= `AXI_RESP_OKAY;
-            axi_awaddr_latched <= 0;
-            slv_reg_wren       <= 0;
         end else begin
-            slv_reg_wren       <= 1'b0;
-
-            if (S_AXI_AWVALID && S_AXI_AWREADY_) begin
+            if (S_AXI_AWVALID && !S_AXI_AWREADY_ && !is_axi_write && cpu_state == CPU_STOPPED) begin
+                // Making sure that SOC Control Module managed to stop the CPU
+                S_AXI_AWREADY_ <= 1'b1;
+                is_axi_write   <= 1'b1;
+            end else if (S_AXI_AWVALID && S_AXI_AWREADY_) begin
                 // Address handshake: slave is by default READY and master has to issue VALID
-                axi_awaddr_latched <= write_index;
+                is_axi_write       <= 1'b1;
                 S_AXI_AWREADY_     <= 1'b0;
                 S_AXI_WREADY_      <= 1'b1;  
             end else if (S_AXI_WVALID && S_AXI_WREADY_) begin
                 // Data handshake: slave is ready to accept new write data and it's waiting for the master to issue VALID
-                S_AXI_WREADY_      <= 1'b0;
-                slv_reg_wren       <= 1'b1;                        
+                is_axi_write       <= 1'b1;
+                S_AXI_WREADY_      <= 1'b0;                     
                 S_AXI_BVALID_      <= 1'b1;       
                 S_AXI_BRESP_       <= `AXI_RESP_OKAY;
             end else if (S_AXI_BVALID && S_AXI_BREADY) begin
                 // Response
+                is_axi_write       <= 1'b0;
                 S_AXI_BVALID_      <= 1'b0;
                 S_AXI_AWREADY_     <= 1'b1; // heres ready for the new write transaction
             end
         end
     end
 
+    // assigning the correct read or write address the signal controlling the register file
+    // since there is only one address line shared by th read and write address two operations
+    // cannot happend at once
+    assign cm_read_write_regfile_addr = (is_axi_read && !is_axi_write) ? read_index  : 
+                                        (!is_axi_read && is_axi_write) ? write_index : 0;
+    
+    assign cm_regfile_we = is_axi_write;
+
     // Register write and reset process
-    /*
-    // This will not work here like that
+    // There's no specific case for resetting the register file here since it happens
+    // already inside the core
     integer byte_id;
     always @(posedge clk or negedge rst) begin
-        if (rst) begin
-            for (reg_id = 0; reg_id < `C_REGISTERS_NUMBER; reg_id = reg_id + 1) begin
-                regfile[reg_id] <= `C_AXI_DATA_WIDTH'h0;
-            end
-        end else begin
-            if (slv_reg_wren) begin
+        if (!rst) begin
+            if (is_axi_write) begin
                 for (byte_id = 0; byte_id < `C_AXI_STROBE_WIDTH; byte_id = byte_id + 1) begin
                     if (S_AXI_WSTRB[byte_id]) begin
                         // Example to illustrate how strobe mechanism works:
                         // if byte_id = 0 then [(0*8)+:8] -> [0+:8] this selects [7:0]
                         // the line performs: 
-                        // regfile[axi_awaddr_latched][7:0]         <= S_AXI_WDATA[7:0]
-                        regfile[axi_awaddr_latched][(byte_id*8)+:8] <= S_AXI_WDATA[(byte_id*8)+:8];
+                        // cm_write_regfile_dat[cm_read_write_regfile_addr][7:0]         <= S_AXI_WDATA[7:0]
+                        cm_write_regfile_dat[cm_read_write_regfile_addr][(byte_id*8)+:8] <= S_AXI_WDATA[(byte_id*8)+:8];
                     end
                 end
             end
         end
     end
-    */
-    
 
 endmodule
