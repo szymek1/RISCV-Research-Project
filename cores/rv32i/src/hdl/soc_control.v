@@ -29,6 +29,7 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 `include "../include/rv32i_params.vh"
+`include "../include/soc_control/axi4lite_configuration.vh"
 
 
 module soc_control (
