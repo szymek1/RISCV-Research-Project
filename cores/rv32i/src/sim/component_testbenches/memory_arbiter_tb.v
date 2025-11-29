@@ -7,44 +7,44 @@
 
 module memory_arbiter_tb ();
 
-    reg                            CLK = 0;
-    reg                            RSTn = 0;
+    reg                          CLK = 0;
+    reg                          RSTn = 0;
 
     // AXI4-lite connections
-    wire                           M_AXI_AWVALID;
-    reg                            M_AXI_AWREADY = 0;
-    wire [  `C_AXI_ADDR_WIDTH-1:0] M_AXI_AWADDR;
-    wire [                    2:0] M_AXI_AWPROT;
-    wire                           M_AXI_WVALID;
-    reg                            M_AXI_WREADY = 0;
-    wire [  `C_AXI_DATA_WIDTH-1:0] M_AXI_WDATA;
-    wire [`C_AXI_STROBE_WIDTH-1:0] M_AXI_WSTRB;
-    reg                            M_AXI_BVALID = 0;
-    wire                           M_AXI_BREADY;
-    reg  [                    1:0] M_AXI_BRESP = 0;
-    wire                           M_AXI_ARVALID;
-    reg                            M_AXI_ARREADY = 0;
-    wire [  `C_AXI_ADDR_WIDTH-1:0] M_AXI_ARADDR;
-    wire [                    2:0] M_AXI_ARPROT;
-    reg                            M_AXI_RVALID = 0;
-    wire                           M_AXI_RREADY;
-    reg  [  `C_AXI_DATA_WIDTH-1:0] M_AXI_RDATA = 0;
-    reg  [                    1:0] M_AXI_RRESP = 0;
+    wire                         M_AXI_AWVALID;
+    reg                          M_AXI_AWREADY = 0;
+    wire [  `AXI_ADDR_WIDTH-1:0] M_AXI_AWADDR;
+    wire [                  2:0] M_AXI_AWPROT;
+    wire                         M_AXI_WVALID;
+    reg                          M_AXI_WREADY = 0;
+    wire [  `AXI_DATA_WIDTH-1:0] M_AXI_WDATA;
+    wire [`AXI_STROBE_WIDTH-1:0] M_AXI_WSTRB;
+    reg                          M_AXI_BVALID = 0;
+    wire                         M_AXI_BREADY;
+    reg  [                  1:0] M_AXI_BRESP = 0;
+    wire                         M_AXI_ARVALID;
+    reg                          M_AXI_ARREADY = 0;
+    wire [  `AXI_ADDR_WIDTH-1:0] M_AXI_ARADDR;
+    wire [                  2:0] M_AXI_ARPROT;
+    reg                          M_AXI_RVALID = 0;
+    wire                         M_AXI_RREADY;
+    reg  [  `AXI_DATA_WIDTH-1:0] M_AXI_RDATA = 0;
+    reg  [                  1:0] M_AXI_RRESP = 0;
 
     // instruction fetching
-    reg  [        `DATA_WIDTH-1:0] pc = 0;
-    reg                            pc_valid = 0;
-    wire [       `INSTR_WIDTH-1:0] instruction;
-    wire                           instruction_valid;
+    reg  [      `DATA_WIDTH-1:0] pc = 0;
+    reg                          pc_valid = 0;
+    wire [     `INSTR_WIDTH-1:0] instruction;
+    wire                         instruction_valid;
 
     // load/store
-    reg  [        `DATA_WIDTH-1:0] addr = 0;
-    reg  [        `DATA_WIDTH-1:0] write_data = 0;
-    reg  [        `DATA_WIDTH-1:0] read_data = 0;
-    reg                            read_enable = 0;
-    reg                            write_enable = 0;
-    reg  [`C_AXI_STROBE_WIDTH-1:0] write_strobe = 0;
-    wire                           operation_valid;
+    reg  [      `DATA_WIDTH-1:0] read_write_addr = 0;
+    reg  [      `DATA_WIDTH-1:0] write_data = 0;
+    wire [      `DATA_WIDTH-1:0] read_data;
+    reg                          read_enable = 0;
+    reg                          write_enable = 0;
+    reg  [`AXI_STROBE_WIDTH-1:0] write_strobe = 0;
+    wire                         read_write_valid;
 
     memory_arbiter dut (
         .CLK (CLK),
@@ -78,13 +78,13 @@ module memory_arbiter_tb ();
         .instruction_valid(instruction_valid),
 
         // load/store
-        .addr(addr),
+        .read_write_addr(read_write_addr),
         .write_data(write_data),
         .read_data(read_data),
         .read_enable(read_enable),
         .write_enable(write_enable),
         .write_strobe(write_strobe),
-        .operation_valid(operation_valid)
+        .read_write_valid(read_write_valid)
     );
 
     initial begin

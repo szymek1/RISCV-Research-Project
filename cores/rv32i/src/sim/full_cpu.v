@@ -2,159 +2,172 @@
 
 `include "../include/rv32i_params.vh"
 `include "../include/rv32i_control.vh"
+`include "../include/axi_configuration.vh"
 
-module full_cpu();
+module full_cpu ();
 
-    reg clk;
-    reg rst;
-    reg pc_stall;
+    reg                          CLK;
+    reg                          RSTn;
+    reg                          pc_stall;
 
-    wire [`RAM_ADDR_WIDTH-1:0] i_r_addr;
-    wire                       i_r_enb;
-    wire [`DATA_WIDTH-1:0]     i_r_dat;
+    // AXI 4 Lite connection between CPU and memory
+    wire                         AXI_AWVALID;
+    wire                         AXI_AWREADY;
+    wire [  `AXI_ADDR_WIDTH-1:0] AXI_AWADDR;
+    wire [                  2:0] AXI_AWPROT;
+    wire                         AXI_WVALID;
+    wire                         AXI_WREADY;
+    wire [  `AXI_DATA_WIDTH-1:0] AXI_WDATA;
+    wire [`AXI_STROBE_WIDTH-1:0] AXI_WSTRB;
+    wire                         AXI_BVALID;
+    wire                         AXI_BREADY;
+    wire [                  1:0] AXI_BRESP;
+    wire                         AXI_ARVALID;
+    wire                         AXI_ARREADY;
+    wire [  `AXI_ADDR_WIDTH-1:0] AXI_ARADDR;
+    wire [                  2:0] AXI_ARPROT;
+    wire                         AXI_RVALID;
+    wire                         AXI_RREADY;
+    wire [  `AXI_DATA_WIDTH-1:0] AXI_RDATA;
+    wire [                  1:0] AXI_RRESP;
 
-    // connections to data RAM
-    wire [`RAM_ADDR_WIDTH-1:0] d_w_addr;
-    wire [`DATA_WIDTH-1:0]     d_w_dat;
-    wire                       d_w_enb;
-    wire [3:0]                 d_w_byte_enb;
-    wire [`RAM_ADDR_WIDTH-1:0] d_r_addr;
-    wire                       d_r_enb;
-    wire [`DATA_WIDTH-1:0]     d_r_dat;
 
+    // Memory
+    axi_memory_mock u_mem (
+        .CLK (CLK),
+        .RSTn(RSTn),
 
-    // Instruction RAM
-    bram32 i_mem(
-        .clk(clk),
-        .rst(rst),
-        .w_addr(12'b0),
-        .w_dat(32'b0),
-        .w_enb(1'b0),
-        .byte_enb(4'b0),
-        .r_addr(i_r_addr),
-        .r_enb(i_r_enb),
-        .r_dat(i_r_dat),
-        .debug_addr(12'b0)
-    );
-    // Data RAM
-    bram32 d_mem(
-        .clk(clk),
-        .rst(rst),
-        .w_addr(d_w_addr),
-        .w_dat(d_w_dat),
-        .w_enb(d_w_enb),
-        .byte_enb(d_w_byte_enb),
-        .r_addr(d_r_addr),
-        .r_enb(d_r_enb),
-        .r_dat(d_r_dat),
-        .debug_addr(12'b0)
+        .S_AXI_AWVALID(AXI_AWVALID),
+        .S_AXI_AWREADY(AXI_AWREADY),
+        .S_AXI_AWADDR (AXI_AWADDR),
+        .S_AXI_AWPROT (AXI_AWPROT),
+        .S_AXI_WVALID (AXI_WVALID),
+        .S_AXI_WREADY (AXI_WREADY),
+        .S_AXI_WDATA  (AXI_WDATA),
+        .S_AXI_WSTRB  (AXI_WSTRB),
+        .S_AXI_BVALID (AXI_BVALID),
+        .S_AXI_BREADY (AXI_BREADY),
+        .S_AXI_BRESP  (AXI_BRESP),
+        .S_AXI_ARVALID(AXI_ARVALID),
+        .S_AXI_ARREADY(AXI_ARREADY),
+        .S_AXI_ARADDR (AXI_ARADDR),
+        .S_AXI_ARPROT (AXI_ARPROT),
+        .S_AXI_RVALID (AXI_RVALID),
+        .S_AXI_RREADY (AXI_RREADY),
+        .S_AXI_RDATA  (AXI_RDATA),
+        .S_AXI_RRESP  (AXI_RRESP)
     );
 
     // CPU
-    riscv_cpu cpu(
-        .clk(clk),
-        .rst(rst),
+    riscv_cpu u_cpu (
+        .CLK(CLK),
+        .RSTn(RSTn),
         .pc_stall(pc_stall),
-        .i_r_addr(i_r_addr),
-        .i_r_enb(i_r_enb),
-        .i_r_dat(i_r_dat),
-        .d_w_addr(d_w_addr),
-        .d_w_dat(d_w_dat),
-        .d_w_enb(d_w_enb),
-        .d_w_byte_enb(d_w_byte_enb),
-        .d_r_addr(d_r_addr),
-        .d_r_enb(d_r_enb),
-        .d_r_dat(d_r_dat)
+
+        .M_AXI_AWVALID(AXI_AWVALID),
+        .M_AXI_AWREADY(AXI_AWREADY),
+        .M_AXI_AWADDR (AXI_AWADDR),
+        .M_AXI_AWPROT (AXI_AWPROT),
+        .M_AXI_WVALID (AXI_WVALID),
+        .M_AXI_WREADY (AXI_WREADY),
+        .M_AXI_WDATA  (AXI_WDATA),
+        .M_AXI_WSTRB  (AXI_WSTRB),
+        .M_AXI_BVALID (AXI_BVALID),
+        .M_AXI_BREADY (AXI_BREADY),
+        .M_AXI_BRESP  (AXI_BRESP),
+        .M_AXI_ARVALID(AXI_ARVALID),
+        .M_AXI_ARREADY(AXI_ARREADY),
+        .M_AXI_ARADDR (AXI_ARADDR),
+        .M_AXI_ARPROT (AXI_ARPROT),
+        .M_AXI_RVALID (AXI_RVALID),
+        .M_AXI_RREADY (AXI_RREADY),
+        .M_AXI_RDATA  (AXI_RDATA),
+        .M_AXI_RRESP  (AXI_RRESP)
     );
 
-    task automatic display_results;
-        begin
-            $display("Time=%0t, pc=%h, instr=%h",
-                $time, cpu.pc, cpu.instruction);
-            $display("  Decode");
-            $display("   op=%b, func3=%b, func7=%b",
-                cpu.DECODE.opcode, cpu.DECODE.func3, cpu.DECODE.func7);
-            $display("   rd_addr=%h, rs1_addr=%h, rs2_addr=%h, imm=%h",
-                cpu.rd_addr, cpu.rs1_addr, cpu.rs2_addr, cpu.immediate);
-            $display("  ALU");
-            $display("   input: rs1=%h, rs2=%h, alu_ctrl=%b",
-                cpu.rs1, cpu.rs2, cpu.alu_ctrl);
-            $display("   output: alu_result=%h",
-                cpu.alu_result);
-            $display("  Memory");
-            $display("   input: use_mem=%h, d_r_addr=%h, d_w_addr=%h, d_w_dat=%h",
-                cpu.use_mem, cpu.d_r_addr, cpu.d_w_addr, cpu.d_w_dat);
-            $display("   output: d_r_dat=%h",
-                cpu.d_r_dat);
-            $display("  Write back");
-            $display("   write_back_data=%h",
-                cpu.write_back_data);
-        end
-    endtask
+    // task automatic display_results;
+    //     begin
+    //         $display("Time=%0t, pc=%h, instr=%h", $time, u_cpu.pc, u_cpu.instruction);
+    //         $display("  Decode");
+    //         $display("   op=%b, func3=%b, func7=%b", u_cpu.u_decode.opcode, u_cpu.u_decode.func3,
+    //                  u_cpu.u_decode.func7);
+    //         $display("   rd_addr=%h, rs1_addr=%h, rs2_addr=%h, imm=%h", u_cpu.rd_addr,
+    //                  u_cpu.rs1_addr, u_cpu.rs2_addr, u_cpu.immediate);
+    //         $display("  ALU");
+    //         $display("   input: rs1=%h, rs2=%h, alu_ctrl=%b", u_cpu.rs1, u_cpu.rs2, u_cpu.alu_ctrl);
+    //         $display("   output: alu_result=%h", u_cpu.alu_result);
+    //         // $display("  Memory");
+    //         // $display("   input: use_mem=%h, d_r_addr=%h, d_w_addr=%h, d_w_dat=%h", u_cpu.use_mem,
+    //         //          u_cpu.d_r_addr, u_cpu.d_w_addr, u_cpu.d_w_dat);
+    //         // $display("   output: d_r_dat=%h", u_cpu.d_r_dat);
+    //         $display("  Write back");
+    //         $display("   write_back_data=%h", u_cpu.write_back_data);
+    //     end
+    // endtask
 
     initial begin
-        clk = 0;
-        forever #5 clk = ~clk;
+        CLK = 0;
+        #5;
+        forever #5 CLK = ~CLK;
     end
 
-    string data_folder;
-    reg [`DATA_WIDTH-1:0] expected_registers [1:`NUM_REGISTERS-1];
-    reg [`DATA_WIDTH-1:0] expected_memory    [`RAM_SIZE_WORDS];
+    string                    data_folder;
+    reg     [`DATA_WIDTH-1:0] expected_registers[1:`NUM_REGISTERS-1];
+    reg     [`DATA_WIDTH-1:0] expected_memory   [ `MEMORY_NUM_WORDS];
 
     // temporary variables
-    reg [`DATA_WIDTH-1:0] pc_last;
-    integer total_steps;
-    integer reg_id;
-    integer mem_addr;
-    integer found_error;
-    reg [`DATA_WIDTH-1:0] value;
-    reg [`DATA_WIDTH-1:0] expected_value;
+    integer                   total_steps;
+    integer                   reg_id;
+    integer                   mem_addr;
+    integer                   found_error;
+    reg     [`DATA_WIDTH-1:0] value;
+    reg     [`DATA_WIDTH-1:0] expected_value;
 
     initial begin
+        RSTn = 1;
+        RSTn = 0;
+
         $dumpfile("full_cpu_tb.vcd");
         $dumpvars(0, full_cpu);
-        $dumpvars(0, cpu.i_mem.mem[0]);
-        $dumpvars(0, cpu.d_mem.mem[0]);
-        $dumpvars(0, cpu.d_mem.mem[1]);
-        $dumpvars(0, cpu.d_mem.mem[2]);
-        $dumpvars(0, cpu.d_mem.mem[3]);
+        $dumpvars(0, u_mem.i_data[0]);
+        $dumpvars(0, u_mem.i_data[1]);
+        $dumpvars(0, u_mem.i_data[2]);
+        $dumpvars(0, u_mem.i_data[3]);
+        $dumpvars(0, u_mem.d_data[0]);
+        $dumpvars(0, u_mem.d_data[1]);
+        $dumpvars(0, u_mem.d_data[2]);
+        $dumpvars(0, u_mem.d_data[3]);
         $dumpvars(0, expected_memory[0]);
-        $dumpvars(0, cpu.REGFILE.registers[5]);
-        $dumpvars(0, cpu.REGFILE.registers[6]);
-        for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
+        $dumpvars(0, u_cpu.u_register_file.registers[5]);
+        $dumpvars(0, u_cpu.u_register_file.registers[6]);
+        for (reg_id = 1; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
             expected_registers[reg_id] = 32'b0;
         end
-        for (mem_addr = 0 ; mem_addr < `RAM_SIZE_WORDS; mem_addr = mem_addr + 1) begin
+        for (mem_addr = 0; mem_addr < `MEMORY_NUM_WORDS; mem_addr = mem_addr + 1) begin
             expected_memory[mem_addr] = 32'b0;
         end
 
-        // Reset
-        rst              = 1'b1;
-        pc_stall         = 1'b1;
+        pc_stall = 1'b1;
         #10;
         // De-assert reset
-        rst = 1'b0;
+        RSTn = 1'b1;
 
-        #10
-        $value$plusargs ("data=%s", data_folder);
+        #10 $value$plusargs("data=%s", data_folder);
         $display("Loading data from %s", data_folder);
-        $readmemh({data_folder, "/memory.hex"}, d_mem.mem);
-        $readmemh({data_folder, "/program.hex"}, i_mem.mem);
+        $readmemh({data_folder, "/memory.hex"}, u_mem.d_data);
+        $readmemh({data_folder, "/program.hex"}, u_mem.i_data);
         $readmemh({data_folder, "/expected_registers.hex"}, expected_registers);
         $readmemh({data_folder, "/expected_memory.hex"}, expected_memory);
 
-        #10;
+        #20;
 
         // Execute program
         $display("Executing program...");
         // De-assert pc_stall
         pc_stall = 1'b0;
         #5;
-        pc_last = -1;
         total_steps = 0;
-        while (cpu.pc != pc_last && total_steps < 1000) begin
-            display_results();
-            pc_last = cpu.pc;
+        while (u_cpu.instruction != 32'h0000006F && total_steps < 1000) begin
             total_steps = total_steps + 1;
             #10;
         end
@@ -167,20 +180,19 @@ module full_cpu();
 
         $display("Verifying results...");
         #1;
-        for (reg_id = 1 ; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
-            value = cpu.REGFILE.registers[reg_id];
+        for (reg_id = 1; reg_id < `NUM_REGISTERS; reg_id = reg_id + 1) begin
+            value = u_cpu.u_register_file.registers[reg_id];
             expected_value = expected_registers[reg_id];
             if (value == expected_value) begin
-                $display("[INFO]  registers[%d] = 0x%h, matches expected",
-                    reg_id, value);
+                $display("[INFO]  registers[%d] = 0x%h, matches expected", reg_id, value);
             end else begin
                 found_error = 1;
-                $display("[ERROR] registers[%d] = 0x%h, expected 0x%h",
-                    reg_id, value, expected_value);
+                $display("[ERROR] registers[%d] = 0x%h, expected 0x%h", reg_id, value,
+                         expected_value);
             end
         end
-        for (mem_addr = 0 ; mem_addr < `RAM_SIZE_WORDS; mem_addr = mem_addr + 1) begin
-            value = d_mem.mem[mem_addr];
+        for (mem_addr = 0; mem_addr < `MEMORY_NUM_WORDS; mem_addr = mem_addr + 1) begin
+            value = u_mem.d_data[mem_addr];
             expected_value = expected_memory[mem_addr];
             if (value == expected_value) begin
                 // only print unexpected values since memory is quite large
@@ -188,8 +200,8 @@ module full_cpu();
                 //     mem_addr * `BYTES_PER_WORD, value);
             end else begin
                 found_error = 1;
-                $display("[ERROR] mem[0x%h] = 0x%h, expected 0x%h",
-                    mem_addr * `BYTES_PER_WORD, value, expected_value);
+                $display("[ERROR] mem[0x%h] = 0x%h, expected 0x%h", mem_addr * `BYTES_PER_WORD,
+                         value, expected_value);
             end
         end
 
