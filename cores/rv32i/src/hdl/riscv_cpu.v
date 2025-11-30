@@ -33,98 +33,151 @@ module riscv_cpu (
     input  [                  1:0] M_AXI_RRESP
 );
 
-    reg  [      `DATA_WIDTH-1:0] pc;
-    wire [      `DATA_WIDTH-1:0] pc_next;
-    wire [      `DATA_WIDTH-1:0] pc_plus_4;
-    wire                         pc_select;
-    reg                          pc_valid;
+    // we have the following transactions, each one has ready and valid signals
+    // and associated data.
+    // - PC - INSTRUCTION - DECODED - ALU_RESULT (- MEM_RESULT) - NEXT_PC
 
-    // Fetch output
-    // MEMORY ARBITER WIRES
-    wire [      `DATA_WIDTH-1:0] instruction;
-    wire                         instruction_valid;
+    // PC
+    reg pc_valid, pc_ready;
+    reg [`DATA_WIDTH-1:0] pc;
+
+    // INSTRUCTION
+    reg instruction_valid, instruction_ready;
+    wire [`DATA_WIDTH-1:0] instruction;
+
+    // DECODED
+    reg decoded_valid, decoded_ready;
+    wire                       is_jump;
+    wire                       is_jalr;
+    wire                       is_branch;
+    wire [    `DATA_WIDTH-1:0] immediate;
+    wire [   `FUNC3_WIDTH-1:0] func3;
+    wire [`REG_ADDR_WIDTH-1:0] rs1_addr;
+    wire [`REG_ADDR_WIDTH-1:0] rs2_addr;
+    wire [`REG_ADDR_WIDTH-1:0] rd_addr;
+    wire                       alu_src1_is_pc;
+    wire                       alu_src2_is_imm;
+    wire                       use_mem;
+    wire                       mem_is_write;
+    wire                       do_write_back;
+    wire [`ALU_CTRL_WIDTH-1:0] alu_ctrl;
+    wire [    `DATA_WIDTH-1:0] rs1;
+    wire [    `DATA_WIDTH-1:0] rs2;
+
+    // EXECUTE_RESULT
+    reg execute_result_valid, execute_result_ready;
+    reg  [`DATA_WIDTH-1:0] write_back_data;
+    wire                   take_branch;
+    // take either or
+    reg                    alu_result_valid;
+    wire [`DATA_WIDTH-1:0] alu_result;
+    wire                   load_store_ready;
+    wire                   mem_result_valid;
+    wire                   mem_result_ready;
+
+    // NEXT_PC
+    reg next_pc_valid, next_pc_ready;
+    reg  [      `DATA_WIDTH-1:0] next_pc;
+
+
     // load/store
-    reg  [      `DATA_WIDTH-1:0] mem_read_write_addr;
+    reg  [      `DATA_WIDTH-1:0] mem_addr;
     reg  [      `DATA_WIDTH-1:0] mem_write_data;
     reg  [      `DATA_WIDTH-1:0] mem_read_data;
-    reg                          mem_read_enable;
-    reg                          mem_write_enable;
     reg  [`AXI_STROBE_WIDTH-1:0] mem_write_strobe;
-    wire                         mem_read_write_valid;
+    wire [      `DATA_WIDTH-1:0] mem_wb_data;  // parsed by byte_reader
 
-    // Decode output
-    wire                         is_jump;
-    wire                         is_jalr;
-    wire                         is_branch;
-    wire [      `DATA_WIDTH-1:0] immediate;
-    wire [     `FUNC3_WIDTH-1:0] func3;
-    wire [  `REG_ADDR_WIDTH-1:0] rs1_addr;
-    wire [  `REG_ADDR_WIDTH-1:0] rs2_addr;
-    wire [  `REG_ADDR_WIDTH-1:0] rd_addr;
-    wire                         alu_src1_is_pc;
-    wire                         alu_src2_is_imm;
-    wire                         use_mem;
-    wire                         mem_write;
-    wire                         do_write_back;
-    wire [  `ALU_CTRL_WIDTH-1:0] alu_ctrl;
-
-    wire [      `DATA_WIDTH-1:0] rs1;
-    wire [      `DATA_WIDTH-1:0] rs2;
-
-    // ALU output
-    wire [      `DATA_WIDTH-1:0] alu_result;
-    reg                          alu_result_valid;
-    wire                         take_branch;
-
-    wire [      `DATA_WIDTH-1:0] mem_wb_data;
-    wire                         mem_valid;
-
-    reg  [      `DATA_WIDTH-1:0] write_back_data;
-    reg                          write_back_data_valid;
-
-    reg                          instruction_done;
 
     // =====   Clocked Components    =====
 
+    // PC generator
+    // do not accept the next pc if we are stalled or the current pc has not
+    // yet been transfered to the fetch unit.
+    assign next_pc_ready = !pc_stall & !pc_valid;
+    reg pc_waiting;
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
-            // init pc one step below so that when we can start the cpu by incrementing the pc
-            pc <= `BOOT_ADDR - `PC_STEP;
+            pc <= `BOOT_ADDR;
             pc_valid <= 1'b0;
-        end else if (!pc_stall && instruction_done) begin
-            pc <= pc_next;
-            pc_valid <= 1'b1;
+            pc_waiting <= 1'b1;
         end else begin
-            pc_valid <= 1'b0;
+            if (next_pc_valid & next_pc_ready) begin
+                // NEXT_PC transaction
+                pc <= next_pc;
+                pc_valid <= 1'b1;
+            end else if (pc_valid & pc_ready) begin
+                // PC transaction
+                pc_valid <= 1'b0;
+            end else if (pc_waiting & !pc_stall) begin
+                // kick start cycle
+                pc_valid   <= 1'b1;
+                pc_waiting <= 1'b0;
+            end
         end
     end
 
+    reg [`DATA_WIDTH-1:0] instruction_latched;
+    assign instruction_ready = 1'b1;  // always ready
+    always @(posedge CLK or negedge RSTn) begin
+        if (!RSTn) begin
+            decoded_valid <= 1'b0;
+            instruction_latched <= `INSTR_WIDTH'b0;
+        end else begin
+            if (instruction_valid & instruction_ready) begin
+                // INSTRUCTION transaction
+                decoded_valid <= 1'b1;
+                instruction_latched <= instruction;
+            end else if (decoded_valid & decoded_ready) begin
+                // DECODED transaction
+                decoded_valid <= 1'b0;
+            end
+        end
+    end
+
+    // MUX between ALU and memory paths
+    assign decoded_ready = use_mem ? load_store_ready : 1'b1;
+    assign execute_result_valid = use_mem ? mem_result_valid : alu_result_valid;
+    assign mem_result_ready = use_mem ? execute_result_ready : 1'b0;
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
             alu_result_valid <= 1'b0;
         end else begin
-            alu_result_valid <= instruction_valid && alu_ctrl != `ALU_CTRL_NOP;
+            if (decoded_valid & decoded_ready) begin
+                // DECODED transaction
+                if (!use_mem) alu_result_valid <= 1'b1;
+            end else if (execute_result_valid & execute_result_ready) begin
+                // EXECUTE_RESULT transaction
+                alu_result_valid <= 1'b0;
+            end
         end
     end
 
+    assign execute_result_ready = 1'b1;  // always ready
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
-            instruction_done <= 1'b1;
-        end else if (!pc_stall) begin
-            instruction_done <= write_back_data_valid;
+            next_pc_valid <= 1'b0;
+        end else begin
+            if (execute_result_valid & execute_result_ready) begin
+                // EXECUTE_RESULT transaction
+                next_pc_valid <= 1'b1;
+            end else if (next_pc_valid & next_pc_ready) begin
+                // NEXT_PC transaction
+                next_pc_valid <= 1'b0;
+            end
         end
     end
 
     register_file u_register_file (
-        .clk(CLK),
-        .rst(!RSTn),
+        .CLK (CLK),
+        .RSTn(RSTn),
 
         .read_enable (1'b1),
         .rs1_addr    (rs1_addr),
         .rs2_addr    (rs2_addr),
         .rs1         (rs1),
         .rs2         (rs2),
-        .write_enable(do_write_back & write_back_data_valid),
+        // WRITE BACK on NEXT_PC transaction
+        .write_enable(do_write_back & next_pc_valid & next_pc_ready),
         .write_addr  (rd_addr),
         .write_data  (write_back_data)
     );
@@ -153,33 +206,34 @@ module riscv_cpu (
         .M_AXI_RDATA  (M_AXI_RDATA),
         .M_AXI_RRESP  (M_AXI_RRESP),
 
-        .pc               (pc),
-        .pc_valid         (pc_valid),
-        .instruction      (instruction),
+        .pc_valid(pc_valid),
+        .pc_ready(pc_ready),
+        .pc(pc),
         .instruction_valid(instruction_valid),
+        .instruction_ready(instruction_ready),
+        .instruction(instruction),
 
-        .read_write_addr (mem_read_write_addr),
-        .write_data      (mem_write_data),
-        .read_data       (mem_read_data),
-        .read_enable     (mem_read_enable),
-        .write_enable    (mem_write_enable),
-        .write_strobe    (mem_write_strobe),
-        .read_write_valid(mem_read_write_valid)
+        .load_store_valid       (decoded_valid && use_mem),
+        .load_store_ready       (load_store_ready),
+        .load_store_addr        (mem_addr),
+        .load_store_is_write    (mem_is_write),
+        .store_strobe           (mem_write_strobe),
+        .store_data             (mem_write_data),
+        .load_store_result_valid(mem_result_valid),
+        .load_store_result_ready(mem_result_ready),
+        .load_data              (mem_read_data)
     );
 
 
     // =====   Clocked Components    =====
     // =====   Fetch stage   =====
 
-    assign pc_plus_4 = pc + 32'd4;
-    assign pc_select = is_jump | (is_branch & take_branch);
-    assign pc_next   = pc_select ? (is_jalr ? rs1 : pc) + immediate : pc_plus_4;
 
     // =====   Fetch stage    =====
     // =====   Decode stage   =====
 
     instruction_decode u_decode (
-        .instr          (instruction),
+        .instr          (instruction_latched),
         .func3          (func3),
         .rs1_addr       (rs1_addr),
         .rs2_addr       (rs2_addr),
@@ -188,7 +242,7 @@ module riscv_cpu (
         .alu_src1_is_pc (alu_src1_is_pc),
         .alu_src2_is_imm(alu_src2_is_imm),
         .use_mem        (use_mem),
-        .mem_write      (mem_write),
+        .mem_is_write   (mem_is_write),
         .is_branch      (is_branch),
         .is_jump        (is_jump),
         .is_jalr        (is_jalr),
@@ -218,39 +272,32 @@ module riscv_cpu (
     // =====   Execute stage   =====
     // =====   Memory stage   =====
 
-    // data RAM wiring
-    // assign d_w_addr     = {alu_result[`RAM_ADDR_WIDTH-1:2], 2'b00};
-    // assign d_w_dat      = mem_write_data;
-    // assign d_w_enb      = use_mem & mem_write;
-    // assign d_w_byte_enb = byte_enb;  // from load store decoder
-    // assign d_r_addr     = alu_result[`RAM_ADDR_WIDTH-1:0];
-    // assign d_r_enb      = use_mem & !mem_write;
-    // 
-
-    assign mem_read_write_addr = mem_write ? {alu_result[`DATA_WIDTH-1:2], 2'b00}: alu_result[`DATA_WIDTH-1:0];
-    assign mem_read_enable = use_mem & !mem_write;
-    assign mem_write_enable = use_mem & mem_write;
+    wire [`DATA_WIDTH-1:0] mem_addr_aux = use_mem ? rs1 + immediate : '0;
+    assign mem_addr = mem_is_write ? {mem_addr_aux[`DATA_WIDTH-1:2], 2'b00} : mem_addr_aux;
 
     byte_reader u_byte_reader (
         .mem_data (mem_read_data),
         .func3    (func3),
         .byte_mask(mem_write_strobe),
-        .wb_data  (mem_wb_data),
-        .valid    (mem_valid)
+        .wb_data  (mem_wb_data)
+        // ,
+        // .valid    (mem_valid)
     );
     // =====   Memory stage   =====
     // =====   Write back stage   =====
 
+    wire [`DATA_WIDTH-1:0] pc_plus_4 = pc + 32'd4;
     always @(*)
         if (is_jump) begin
             write_back_data = pc_plus_4;
-            write_back_data_valid = instruction_valid;
+            next_pc = (is_jalr ? rs1 : pc) + immediate;
         end else if (use_mem) begin
             write_back_data = mem_wb_data;
-            write_back_data_valid = mem_read_write_valid;
+            next_pc = pc_plus_4;
         end else begin
             write_back_data = alu_result;
-            write_back_data_valid = alu_result_valid;
+            if (is_branch & take_branch) next_pc = pc + immediate;
+            else next_pc = pc_plus_4;
         end
 
     // =====   Write back stage   =====

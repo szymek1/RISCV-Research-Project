@@ -46,7 +46,6 @@ module axi_memory_mock (
     reg S_AXI_BVALID_;
     reg [1:0] S_AXI_BRESP_;
     reg [`MEMORY_ADDR_WIDTH-1:0] axi_awaddr_latched;  // latched write address
-    reg slv_reg_wren;  // internal write-enable pulse for user logic
 
     // Read channel internal registers
     reg S_AXI_ARREADY_;
@@ -98,10 +97,7 @@ module axi_memory_mock (
             S_AXI_BVALID_      <= 1'b0;
             S_AXI_BRESP_       <= `AXI_RESP_OKAY;
             axi_awaddr_latched <= 0;
-            slv_reg_wren       <= 0;
         end else begin
-            slv_reg_wren <= 1'b0;
-
             if (S_AXI_AWVALID && S_AXI_AWREADY_) begin
                 // Address handshake: slave is by default READY and master has to issue VALID
                 axi_awaddr_latched <= write_index;
@@ -110,7 +106,6 @@ module axi_memory_mock (
             end else if (S_AXI_WVALID && S_AXI_WREADY_) begin
                 // Data handshake: slave is ready to accept new write data and it's waiting for the master to issue VALID
                 S_AXI_WREADY_ <= 1'b0;
-                slv_reg_wren  <= 1'b1;
                 S_AXI_BVALID_ <= 1'b1;
                 S_AXI_BRESP_  <= `AXI_RESP_OKAY;
             end else if (S_AXI_BVALID && S_AXI_BREADY) begin
@@ -131,7 +126,7 @@ module axi_memory_mock (
                 d_data[reg_id] <= `AXI_DATA_WIDTH'h0;
             end
         end else begin
-            if (slv_reg_wren) begin
+            if (S_AXI_WVALID && S_AXI_WREADY_) begin
                 for (byte_id = 0; byte_id < `AXI_STROBE_WIDTH; byte_id = byte_id + 1) begin
                     if (S_AXI_WSTRB[byte_id]) begin
                         // Example to illustrate how strobe mechanism works:

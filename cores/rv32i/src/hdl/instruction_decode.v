@@ -19,7 +19,7 @@ module instruction_decode (
     output                           is_branch,
     output                           is_jump,
     output                           is_jalr,
-    output                           mem_write,
+    output                           mem_is_write,
     output                           do_write_back,
     output reg [`ALU_CTRL_WIDTH-1:0] alu_ctrl
 );
@@ -31,7 +31,7 @@ module instruction_decode (
     reg has_func7;
 
     assign use_mem         = (opcode == `OPCODE_LOAD) || (opcode == `OPCODE_STORE);
-    assign mem_write       = (opcode == `OPCODE_STORE);
+    assign mem_is_write    = (opcode == `OPCODE_STORE);
     assign is_branch       = (opcode == `OPCODE_BRANCH);
     assign is_jump         = (opcode == `OPCODE_JAL) || (opcode == `OPCODE_JALR);
     assign is_jalr         = (opcode == `OPCODE_JALR);

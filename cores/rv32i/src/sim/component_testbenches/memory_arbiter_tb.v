@@ -79,11 +79,11 @@ module memory_arbiter_tb ();
 
         // load/store
         .read_write_addr(read_write_addr),
-        .write_data(write_data),
-        .read_data(read_data),
+        .store_data(write_data),
+        .load_data(read_data),
         .read_enable(read_enable),
         .write_enable(write_enable),
-        .write_strobe(write_strobe),
+        .store_strobe(write_strobe),
         .read_write_valid(read_write_valid)
     );
 
