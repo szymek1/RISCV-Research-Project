@@ -2,246 +2,244 @@
 //////////////////////////////////////////////////////////////////////////////////
 // Company: ISAE
 // Engineer: Szymon Bogus
-// 
+//
 // Create Date: 28.11.25
-// Design Name: 
+// Design Name:
 // Module Name: soc_control
 // Project Name: rv32i_sc
 // Target Devices: Zybo Z7-20
-// Tool Versions: 
+// Tool Versions:
 // Description: Control module responsible for communication between Zynq PS,
 //              Fault Injection Module and the core. It contains AXI4 Lite Slave,
 //              which it uses to receive requests from Zynq PS that can instruct the
 //              module to:
 //              - dump all the entire register file
 //              - read a single register
-//              - write to a single register (with or without a fault) 
-//              
+//              - write to a single register (with or without a fault)
+//
 //              In order to work on the register file this module is capable of
 //              issuing the signal cm_cpu_stop, which effectively blocks the clock signal
 //              to all CPU components except for the register file.
-// 
+//
 // Dependencies: rv32i_params.vh
-// 
+//
 // Revision:
 // Revision 0.01 - File Created
 // Additional Comments:
-// 
+//
 //////////////////////////////////////////////////////////////////////////////////
 `include "../include/rv32i_params.vh"
-`include "../include/soc_control/axi4lite_configuration.vh"
+`include "../include/axi_configuration.vh"
 
+// Inside this AXI slave we need to multiplex between different sub components:
+// - register file
+// - other registers of the core (PC)
+// - control options (starting / stopping the core)
+// Selecting which of these to talk to based on the address.
+// The lowest `SUB_ADDR_WIDTH bits are used to specify the address within the
+// component.
+// The next `SUB_SEL_WIDTH bits are used to specify which component to talk to.
+// The upper bits are ignored so this AXI slave can be placed freely in the
+// masters memory space.
+`define SUB_ADDR_WIDTH 8
+`define SUB_SEL_WIDTH 8
+`define USED_ADDR_WIDTH (`SUB_SEL_WIDTH+`SUB_ADDR_WIDTH)
+`define SUB_SEL_REGISTER_FILE `SUB_SEL_WIDTH'h00
+`define SUB_SEL_PC `SUB_SEL_WIDTH'h01
+
+// In theroy, _WAIT_DONE and _RESP could be condensed into one state where the
+// result is immediately returned. However, at this state we do not really care
+// about single cycles and otherwise we would end up with very long
+// combinatorial paths.
+// On the other hand, STATE_READ_RECV_ADDR does not exist since we can achive
+// the same with just STATE_IDLE (AXI allows deasserting ARREADY) without
+// introducing more complexity.
+`define STATE_WIDTH 4
+`define STATE_IDLE `STATE_WIDTH'h0            // ready to accept reads, or transition to write state
+`define STATE_READ_ISSUE `STATE_WIDTH'h1      // issue read request to the sub component
+`define STATE_READ_WAIT_DONE `STATE_WIDTH'h2  // collect result of read request
+`define STATE_READ_RESP `STATE_WIDTH'h3       // return read response via AXI
+`define STATE_WRITE_RECV_ADDR `STATE_WIDTH'h8 // ready to accept write address
+`define STATE_WRITE_RECV_DATA `STATE_WIDTH'h9 // ready to accept write data
+`define STATE_WRITE_ISSUE `STATE_WIDTH'hA     // issue write request to the sub component
+`define STATE_WRITE_WAIT_DONE `STATE_WIDTH'hB // collect result of write request
+`define STATE_WRITE_RESP `STATE_WIDTH'hC      // return write response via AXI
 
 module soc_control (
-    input clk,
-    input rst_n,
+    input CLK,
+    input RSTn,
 
-    // connections to RISC-V core
-    output                                   cm_cpu_stop,
-    output                                   cm_regfile_we,
-    output [`DATA_WIDTH-1:0]                 cm_write_regfile_dat,
-    output [`REG_ADDR_WIDTH-1:0]             cm_read_write_regfile_addr,
-    input  [`DATA_WIDTH-1:0]                 cm_read_regfile_dat,
+    // connections to RISC-V register file
+    // output reg                       cm_cpu_stop,
+    output reg [`REG_ADDR_WIDTH-1:0] regfile_addr,
+    input      [    `DATA_WIDTH-1:0] regfile_read_data,
+    output reg                       regfile_write_enable,
+    output reg [    `DATA_WIDTH-1:0] regfile_write_data,
 
-    // connections to AXI4 Lite 
+    // AXI4-lite connections
     // AXI write address
-	output						             S_AXI_AWREADY,  
-	input						             S_AXI_AWVALID,  
-	input  [`C_AXI_ADDR_WIDTH-1:0]           S_AXI_AWADDR,  
-	input  [2:0]				             S_AXI_AWPROT,   
-
-	// AXI write data and write strobe
-	output						             S_AXI_WREADY,   
-	input						             S_AXI_WVALID,    
-                                                   
-	input   [`C_AXI_DATA_WIDTH-1:0]		     S_AXI_WDATA,    
-	input   [`C_AXI_STROBE_WIDTH-1:0]	     S_AXI_WSTRB,    
-
-	// AXI write response
-	output						             S_AXI_BVALID,    
-	output	[1:0]				             S_AXI_BRESP,    
-                                                   
-	input						             S_AXI_BREADY,   
-                                                                   
-
-	// AXI read address
-	output						             S_AXI_ARREADY,  
-	input						             S_AXI_ARVALID,  
-	input	[`C_AXI_ADDR_WIDTH-1:0]          S_AXI_ARADDR,   
-	input	[2:0]				             S_AXI_ARPROT,   
-
-	// AXI read data and response
-	output						             S_AXI_RVALID,   
-	output	[`C_AXI_DATA_WIDTH-1:0]		     S_AXI_RDATA,    
-	output	[1:0]				             S_AXI_RRESP,                                                                   
-	input						             S_AXI_RREADY,
-
-    // Debug ports
-    output [1:0]                               deb_cpu_state
+    output reg                         S_AXI_AWREADY,
+    input                              S_AXI_AWVALID,
+    input      [  `AXI_ADDR_WIDTH-1:0] S_AXI_AWADDR,
+    input      [                  2:0] S_AXI_AWPROT,
+    // AXI write data and write strobe
+    output reg                         S_AXI_WREADY,
+    input                              S_AXI_WVALID,
+    input      [  `AXI_DATA_WIDTH-1:0] S_AXI_WDATA,
+    input      [`AXI_STROBE_WIDTH-1:0] S_AXI_WSTRB,
+    // AXI write response
+    output reg                         S_AXI_BVALID,
+    output reg [  `AXI_RESP_WIDTH-1:0] S_AXI_BRESP,
+    input                              S_AXI_BREADY,
+    // AXI read address
+    output reg                         S_AXI_ARREADY,
+    input                              S_AXI_ARVALID,
+    input      [  `AXI_ADDR_WIDTH-1:0] S_AXI_ARADDR,
+    input      [                  2:0] S_AXI_ARPROT,
+    // AXI read data and response
+    output reg                         S_AXI_RVALID,
+    output reg [  `AXI_DATA_WIDTH-1:0] S_AXI_RDATA,
+    output reg [  `AXI_RESP_WIDTH-1:0] S_AXI_RRESP,
+    input                              S_AXI_RREADY
 );
+    reg                       op_done;  // if the read/write was completed
+    reg                       op_successful;  // if the read/write was successful
+    reg [`AXI_DATA_WIDTH-1:0] read_data;
 
-    // Read/Write indexes (point to specific word)
-    wire [`C_ADDR_REG_BITS-1:0] read_index  = S_AXI_ARADDR[`C_AXI_ADDR_WIDTH-1:`C_ADDR_LSB];
-    wire [`C_ADDR_REG_BITS-1:0] write_index = S_AXI_AWADDR[`C_AXI_ADDR_WIDTH-1:`C_ADDR_LSB];
+    // state machine
+    reg [   `STATE_WIDTH-1:0] state;
+    reg [   `STATE_WIDTH-1:0] next_state;
+    always @(*) begin
+        next_state = state;
+        case (state)
+            `STATE_IDLE: begin
+                if (S_AXI_ARVALID) next_state = `STATE_READ_ISSUE;
+                else if (S_AXI_AWVALID) next_state = `STATE_WRITE_RECV_ADDR;
+            end
+            `STATE_READ_ISSUE: next_state = `STATE_READ_WAIT_DONE;
+            `STATE_READ_WAIT_DONE: if (op_done) next_state = `STATE_READ_RESP;
+            `STATE_READ_RESP: if (S_AXI_RREADY) next_state = `STATE_IDLE;
+            `STATE_WRITE_RECV_ADDR: if (S_AXI_AWVALID) next_state = `STATE_WRITE_RECV_DATA;
+            `STATE_WRITE_RECV_DATA: if (S_AXI_WVALID) next_state = `STATE_WRITE_ISSUE;
+            `STATE_WRITE_ISSUE: next_state = `STATE_WRITE_WAIT_DONE;
+            `STATE_WRITE_WAIT_DONE: if (op_done) next_state = `STATE_WRITE_RESP;
+            `STATE_WRITE_RESP: if (S_AXI_BREADY) next_state = `STATE_IDLE;
+        endcase
+    end
+    always @(posedge CLK or negedge RSTn)
+        if (!RSTn) state <= `STATE_IDLE;
+        else state <= next_state;
 
-    // Internal registers
-    // Write channel internal registers
-    reg                         S_AXI_AWREADY_;
-    reg                         S_AXI_WREADY_;
-    reg                         S_AXI_BVALID_;
-    reg [1:0]                   S_AXI_BRESP_;
-    reg [`C_ADDR_REG_BITS-1:0]  axi_awaddr_latched;  // latched write address
-    reg                         slv_reg_wren;        // internal write-enable pulse for user logic
-    reg [`DATA_WIDTH-1:0]       strobed_data;
+    // AXI Read
+    always @(*) begin
+        S_AXI_ARREADY = 1'b0;
+        S_AXI_RVALID  = 1'b0;
+        S_AXI_RDATA   = `AXI_DATA_WIDTH'b0;
+        S_AXI_RRESP   = `AXI_RESP_WIDTH'b0;
+        case (state)
+            `STATE_IDLE: S_AXI_ARREADY = 1'b1;
+            `STATE_READ_RESP: begin
+                S_AXI_RVALID = 1'b1;
+                S_AXI_RDATA  = op_successful ? read_data : '0;
+                S_AXI_RRESP  = op_successful ? `AXI_RESP_OKAY : `AXI_RESP_SLVERR;
+            end
+        endcase
+    end
 
-    // Read channel internal registers
-    reg                         S_AXI_ARREADY_;
-    reg                         S_AXI_RVALID_;
-    reg [1:0]                   S_AXI_RRESP_;
-    reg [`C_AXI_DATA_WIDTH-1:0] S_AXI_RDATA_;        // pipelined read data output
-    reg [`C_ADDR_REG_BITS-1:0]  axi_araddr_latched;  // latched read address
+    // AXI Write
+    always @(*) begin
+        S_AXI_AWREADY = 1'b0;
+        S_AXI_WREADY  = 1'b0;
+        S_AXI_BVALID  = 1'b0;
+        S_AXI_BRESP   = `AXI_RESP_WIDTH'b0;
+        case (state)
+            `STATE_WRITE_RECV_ADDR: S_AXI_AWREADY = 1'b1;
+            `STATE_WRITE_RECV_DATA: S_AXI_WREADY = 1'b1;
+            `STATE_WRITE_RESP: begin
+                S_AXI_BVALID = 1'b1;
+                S_AXI_BRESP  = op_successful ? `AXI_RESP_OKAY : `AXI_RESP_SLVERR;
+            end
+        endcase
+    end
 
-    // Output wires
-    // Write related
-    assign S_AXI_AWREADY = S_AXI_AWREADY_;
-    assign S_AXI_WREADY  = S_AXI_WREADY_;
-    assign S_AXI_BVALID  = S_AXI_BVALID_;
-    assign S_AXI_BRESP   = S_AXI_BRESP_;
-
-    // Read related
-    assign S_AXI_ARREADY = S_AXI_ARREADY_;
-    assign S_AXI_RVALID  = S_AXI_RVALID_;
-    assign S_AXI_RRESP   = S_AXI_RRESP_;
-    assign S_AXI_RDATA   = S_AXI_RDATA_;
-
-    // Core stalling logic
-    localparam CPU_RUNNING    = 2'b00;
-    localparam CPU_STOP_WAIT  = 2'b01; // allow register file to settle in order to avoid latching on old data
-    localparam CPU_STOPPED    = 2'b10;
-    reg [1:0]  cpu_state      = CPU_RUNNING;
-
-    wire       read_complete  = S_AXI_RVALID_ && S_AXI_RREADY;
-    wire       write_complete = S_AXI_BVALID_ && S_AXI_BREADY;
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            cpu_state <= CPU_RUNNING;
+    // Latch data from AXI bus on transactions
+    reg [ `USED_ADDR_WIDTH-1:0] latched_address;
+    reg [  `AXI_DATA_WIDTH-1:0] latched_write_data;
+    reg [`AXI_STROBE_WIDTH-1:0] latched_write_strobe;
+    always @(posedge CLK or negedge RSTn)
+        if (!RSTn) begin
+            latched_address <= `AXI_ADDR_WIDTH'b0;
+            latched_write_data <= `AXI_DATA_WIDTH'b0;
+            latched_write_strobe <= `AXI_STROBE_WIDTH'b0;
         end else begin
-            case (cpu_state)
-                CPU_RUNNING   : cpu_state <= (S_AXI_ARVALID  || S_AXI_AWVALID)  ? CPU_STOPPED : CPU_RUNNING;
-                CPU_STOPPED   : cpu_state <= (read_complete  || write_complete) ? CPU_RUNNING : CPU_STOPPED;
-                default       : cpu_state <= CPU_RUNNING;
+            case (state)
+                `STATE_IDLE: begin
+                    if (S_AXI_ARVALID) latched_address <= S_AXI_ARADDR[`USED_ADDR_WIDTH-1:0];
+                end
+                `STATE_WRITE_RECV_ADDR: begin
+                    if (S_AXI_AWVALID) latched_address <= S_AXI_AWADDR[`USED_ADDR_WIDTH-1:0];
+                end
+                `STATE_WRITE_RECV_DATA:
+                if (S_AXI_WVALID) begin
+                    latched_write_data   <= S_AXI_WDATA;
+                    latched_write_strobe <= S_AXI_WSTRB;
+                end
             endcase
         end
-    end
-    
-    assign cm_cpu_stop   = (cpu_state == CPU_STOPPED) ? 1'b1 : 1'b0;
-    assign deb_cpu_state = cpu_state;
 
-    // Read process
-    reg is_axi_read;
-    reg r_data_valid_pending;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            is_axi_read          <= 1'b0;
-            r_data_valid_pending <= 1'b0;
-            S_AXI_ARREADY_       <= 1'b1; 
-            S_AXI_RVALID_        <= 1'b0;
-            S_AXI_RDATA_         <= 0;
-            S_AXI_RRESP_         <= `AXI_RESP_OKAY;
-        end else begin
-            if (S_AXI_ARVALID && S_AXI_ARREADY_) begin
-                // Address handshake: slave is by default ready so the handshake happends immediately
-                //                    once the master issue the address
-                is_axi_read        <= 1'b1;
-                S_AXI_ARREADY_     <= 1'b0;
-                
-                // Do NOT set RVALID yet. We must wait for the address 
-                // to propagate through 'cm_read_write_regfile_addr'
-                // and for the Register File to output data.
-                r_data_valid_pending <= 1'b1; 
-            end else if (r_data_valid_pending) begin
-                // Data latch phase
-                // Now that 'is_axi_read' has been 1 for a cycle, 
-                // the RF output 'cm_read_regfile_dat' is valid.
-                S_AXI_RVALID_        <= 1'b1;
-                S_AXI_RDATA_         <= cm_read_regfile_dat;
-                S_AXI_RRESP_         <= `AXI_RESP_OKAY;
-                
-                r_data_valid_pending <= 1'b0;
-            end else if (S_AXI_RREADY && S_AXI_RVALID_) begin
-                // Transaction complete: master accepts the data
-                is_axi_read        <= 1'b0;
-                S_AXI_RVALID_      <= 1'b0;
-                S_AXI_ARREADY_     <= 1'b1;
-            end
-            
-        end
-    end
-
-    // Write process
-    reg is_axi_write;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            is_axi_write       <= 1'b0;
-            S_AXI_AWREADY_     <= 1'b1; 
-            S_AXI_WREADY_      <= 1'b0;
-            S_AXI_BVALID_      <= 1'b0;
-            S_AXI_BRESP_       <= `AXI_RESP_OKAY;
-        end else begin
-            if (S_AXI_AWVALID && S_AXI_AWREADY_) begin
-                // Address handshake: slave is by default READY and master has to issue VALID
-                is_axi_write       <= 1'b1;
-                S_AXI_AWREADY_     <= 1'b0;
-                S_AXI_WREADY_      <= 1'b1;  
-            end else if (S_AXI_WVALID && S_AXI_WREADY_) begin
-                // Data handshake: slave is ready to accept new write data and it's waiting for the master to issue VALID
-                is_axi_write       <= 1'b1;
-                S_AXI_WREADY_      <= 1'b0;                     
-                S_AXI_BVALID_      <= 1'b1;       
-                S_AXI_BRESP_       <= `AXI_RESP_OKAY;
-            end else if (S_AXI_BVALID && S_AXI_BREADY) begin
-                // Response
-                is_axi_write       <= 1'b0;
-                S_AXI_BVALID_      <= 1'b0;
-                S_AXI_AWREADY_     <= 1'b1; // heres ready for the new write transaction
-            end
-            
-            
-        end
-    end
-
-    // assigning the correct read or write address the signal controlling the register file
-    // since there is only one address line shared by th read and write address two operations
-    // cannot happend at once
-    assign cm_read_write_regfile_addr = (is_axi_read  && !is_axi_write) ? read_index  : 
-                                        (!is_axi_read && is_axi_write)  ? write_index : 0;
-    
-    assign cm_regfile_we              = is_axi_write;
-    assign cm_write_regfile_dat       = strobed_data;
-
-    // Register write and reset process
-    // There's no specific case for resetting the register file here since it happens
-    // already inside the core
-    integer byte_id;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            strobed_data <= 0;
-        end else begin
-            if (S_AXI_WVALID && S_AXI_WREADY_) begin
-                for (byte_id = 0; byte_id < `C_AXI_STROBE_WIDTH; byte_id = byte_id + 1) begin
-                    if (S_AXI_WSTRB[byte_id]) begin
-                        // Example to illustrate how strobe mechanism works:
-                        // if byte_id = 0 then [(0*8)+:8] -> [0+:8] this selects [7:0]
-                        // the line performs: 
-                        // strobed_data[7:0]         <= S_AXI_WDATA[7:0]
-                        strobed_data[(byte_id*8)+:8] <= S_AXI_WDATA[(byte_id*8)+:8];
-                    end else begin
-                        strobed_data[(byte_id*8)+:8] <= cm_read_regfile_dat[(byte_id*8) +: 8];
-                    end
+    // Read/write collect the responses
+    reg regfile_op_successful;
+    always @(*)
+        if (state == `STATE_READ_WAIT_DONE || state == `STATE_WRITE_WAIT_DONE) begin
+            case (sub_selector)
+                `SUB_SEL_REGISTER_FILE: op_done = 1'b1;  // takes one cycle
+                default:                op_done = 1'b1;  // invalid op always done
+            endcase
+        end else op_done = 1'b0;
+    always @(posedge CLK or negedge RSTn)
+        if (!RSTn) begin
+            op_successful <= 1'b0;
+            read_data <= '0;
+        end else if (op_done) begin  // on state transition from _WAIT_DONE to _RESP
+            case (sub_selector)
+                `SUB_SEL_REGISTER_FILE: begin
+                    op_successful <= regfile_op_successful;
+                    read_data <= regfile_read_data;
                 end
-            end
+                default: begin
+                    op_successful <= 1'b0;
+                    read_data <= `DATA_WIDTH'b0;
+                end
+            endcase
         end
+
+    wire [ `SUB_SEL_WIDTH-1:0] sub_selector;
+    wire [`SUB_ADDR_WIDTH-1:0] sub_addr;
+    assign sub_selector = latched_address[`USED_ADDR_WIDTH-1:`SUB_ADDR_WIDTH];
+    assign sub_addr = latched_address[`SUB_ADDR_WIDTH-1:0];
+
+    // Register File issue
+    // There are only 32 Registers, so reads/write to larger address are not valid.
+    // Furthermore, writes to x0 are not allowed and all 32 bits have to be written at once.
+    wire [`REG_ADDR_WIDTH-1:0] regfile_sub_addr = sub_addr[`REG_ADDR_WIDTH-1:0];
+    wire regfile_read_valid = (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH] == '0);
+    wire regfile_write_valid = regfile_read_valid && sub_addr != '0 && (latched_write_strobe == '1);
+    always @(*) begin
+        regfile_addr = `REG_ADDR_WIDTH'b0;
+        regfile_write_enable = 1'b0;
+        regfile_write_data = `DATA_WIDTH'b0;
+        case (state)
+            `STATE_READ_ISSUE: begin
+                regfile_addr = regfile_read_valid ? regfile_sub_addr : `REG_ADDR_WIDTH'b0;
+            end
+            `STATE_WRITE_ISSUE: begin
+                regfile_addr = regfile_write_valid ? regfile_sub_addr : `REG_ADDR_WIDTH'b0;
+                regfile_write_enable = regfile_write_valid;
+                regfile_write_data = latched_write_data;
+            end
+            `STATE_READ_WAIT_DONE:  regfile_op_successful <= regfile_read_valid;
+            `STATE_WRITE_WAIT_DONE: regfile_op_successful <= regfile_write_valid;
+        endcase
     end
 
 endmodule

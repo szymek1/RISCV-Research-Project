@@ -9,8 +9,6 @@ module riscv_cpu (
     input CLK,
     input RSTn,
 
-    input pc_stall,
-
     // AXI4-lite connections to the memory
     output                         M_AXI_AWVALID,
     input                          M_AXI_AWREADY,
@@ -22,7 +20,7 @@ module riscv_cpu (
     output [`AXI_STROBE_WIDTH-1:0] M_AXI_WSTRB,
     input                          M_AXI_BVALID,
     output                         M_AXI_BREADY,
-    input  [                  1:0] M_AXI_BRESP,
+    input  [  `AXI_RESP_WIDTH-1:0] M_AXI_BRESP,
     output                         M_AXI_ARVALID,
     input                          M_AXI_ARREADY,
     output [  `AXI_ADDR_WIDTH-1:0] M_AXI_ARADDR,
@@ -30,14 +28,14 @@ module riscv_cpu (
     input                          M_AXI_RVALID,
     output                         M_AXI_RREADY,
     input  [  `AXI_DATA_WIDTH-1:0] M_AXI_RDATA,
-    input  [                  1:0] M_AXI_RRESP,
+    input  [  `AXI_RESP_WIDTH-1:0] M_AXI_RRESP,
 
     // connections to SOC Control Module
-    output [`DATA_WIDTH-1:0]     cm_read_regfile_dat,
-    input                        cm_cpu_stop,                // stops an entire core to perform read/write activity
+    input                        pc_stall,
+    input  [`REG_ADDR_WIDTH-1:0] cm_regfile_addr,
+    output [    `DATA_WIDTH-1:0] cm_regfile_read_data,
     input                        cm_regfile_we,
-    input  [`REG_ADDR_WIDTH-1:0] cm_read_write_regfile_addr, // used for both activities by the external module
-    input  [`DATA_WIDTH-1:0]     cm_write_regfile_dat
+    input  [    `DATA_WIDTH-1:0] cm_regfile_write_data
 );
 
     // we have the following transactions, each one has ready and valid signals
@@ -178,7 +176,6 @@ module riscv_cpu (
         .CLK (CLK),
         .RSTn(RSTn),
 
-        .read_enable (1'b1),
         .rs1_addr    (rs1_addr),
         .rs2_addr    (rs2_addr),
         .rs1         (rs1),
@@ -186,7 +183,12 @@ module riscv_cpu (
         // WRITE BACK on NEXT_PC transaction
         .write_enable(do_write_back & next_pc_valid & next_pc_ready),
         .write_addr  (rd_addr),
-        .write_data  (write_back_data)
+        .write_data  (write_back_data),
+
+        .extra_addr        (cm_regfile_addr),
+        .extra_read_data   (cm_regfile_read_data),
+        .extra_write_enable(cm_regfile_we),
+        .extra_write_data  (cm_regfile_write_data)
     );
 
     memory_arbiter u_memory_arbiter (
@@ -256,31 +258,6 @@ module riscv_cpu (
         .do_write_back  (do_write_back),
         .alu_ctrl       (alu_ctrl)
     );
-
-    // // In case SOC Control Module wants to
-    // // - read register file: it will use rs1_addr and rs1 fields given cm_cpu_stop == 1
-    // // - write register file: it will use write_enable, write_addr, write_data fields given cm_cpu_stop == 1
-    // // This module is unaffected by gating done to the input clock signal as it has to operate
-    // // even when the rest of the clock is put to halt
-    // register_file REGFILE(
-    //     .clk(clk), // this is the only module which receives the clock signal regardless cm_cpu_stop flag
-    //     .rst(rst), 
-    //     .read_enable(1'b1),
-    //     .rs2_addr(rs2_addr),
-    //     .rs1_addr(!cm_cpu_stop   ? rs1_addr        : cm_read_write_regfile_addr),
-    //     .rs1(rf_rs1_out),
-    //     .rs2(rs2),
-    //     .write_enable((!cm_cpu_stop && do_write_back) || (cm_cpu_stop && cm_regfile_we)), // if CPU is supposed to freeze in the middle of ADD/LW signal 
-    //                                                                                       // do_write_back will remain HIGH in case we only have here 
-    //                                                                                       // do_write_back || (cm_cpu_stop && cm_regfile_we)- 
-    //                                                                                       // this will overwrite the register that soc_control is trying to read. 
-    //                                                                                       // The current approach makes sure to ignore do_write_back when the CPU is stopped
-    //     .write_addr(!cm_cpu_stop ? rd_addr         : cm_read_write_regfile_addr),
-    //     .write_data(!cm_cpu_stop ? write_back_data : cm_write_regfile_dat)
-    // );
-
-    // assign rs1                 = rf_rs1_out;
-    // assign cm_read_regfile_dat = rf_rs1_out;
 
     // =====   Decode stage   =====
     // =====   Execute stage   =====

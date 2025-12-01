@@ -60,9 +60,8 @@ module full_cpu ();
 
     // CPU
     riscv_cpu u_cpu (
-        .CLK(CLK),
+        .CLK (CLK),
         .RSTn(RSTn),
-        .pc_stall(pc_stall),
 
         .M_AXI_AWVALID(AXI_AWVALID),
         .M_AXI_AWREADY(AXI_AWREADY),
@@ -82,7 +81,13 @@ module full_cpu ();
         .M_AXI_RVALID (AXI_RVALID),
         .M_AXI_RREADY (AXI_RREADY),
         .M_AXI_RDATA  (AXI_RDATA),
-        .M_AXI_RRESP  (AXI_RRESP)
+        .M_AXI_RRESP  (AXI_RRESP),
+
+        .pc_stall(pc_stall),
+        .cm_regfile_addr(`REG_ADDR_WIDTH'b0),
+        .cm_regfile_read_data(),
+        .cm_regfile_we(1'b0),
+        .cm_regfile_write_data(`DATA_WIDTH'b0)
     );
 
     // task automatic display_results;
