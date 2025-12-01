@@ -17,7 +17,7 @@ The proposed architecture uses [Digilent Zybo Z7-20](https://digilent.com/shop/z
 #### High Level Architecture
 The idea is to have two workers (Zybo boards) one implements mitigated core, another one unmitigated. Both workers communicate with the Master PC (on the diagram below Fault Injection Orchestrator) which sends to them what kind of instruction to execute and what kind of fault to inject.
 
-![High Level Architecture](docs/img/high_lvl_arch.png)
+![High Level Architecture](docs/high_level_arch.drawio.svg)
 
 The outputs from cores are collected and compared against each other to establish, if mitigation worked and what was the time performance of the mitgated CPU.
 
