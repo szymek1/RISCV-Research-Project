@@ -185,7 +185,8 @@ module soc_control_tb (
         
         // Wait 1 cycle
         @(posedge clk); 
-        #1;
+        #1; // minor delay to account for the delat delay (on the waveforms everything 
+            // looks fine even without it but the test didn't want to pass without it)
         if (cm_cpu_stop !== 1'b1) 
             $error("[ERROR]: CPU did not stop 1 cycle after ARVALID assertion!");
         
@@ -208,7 +209,7 @@ module soc_control_tb (
         else
              $display("[SUCCESS]: CPU resumed after transaction.");
 
-        $display("\n=== All Tests Passed ===\n");
+        $display("\n--- All Tests Passed ---\n");
         $finish;
     end
 
@@ -245,13 +246,13 @@ module soc_control_tb (
 
         // Response Phase
         wait(S_AXI_BVALID);
-        if (S_AXI_BRESP != 2'b00) $error("AXI Write Error response");
+        if (S_AXI_BRESP != 2'b00) $error("[ERROR:] AXI Write Error response");
         
         @(posedge clk);
         S_AXI_BREADY <= 1'b0;
         
         // Safety gap
-        // @(posedge clk);
+        @(posedge clk);
     end
     endtask
 
@@ -276,16 +277,16 @@ module soc_control_tb (
         
         wait(S_AXI_RVALID);
         if (S_AXI_RDATA != expected_data) begin
-            $error("READ MISMATCH! Addr: %h, Exp: %h, Got: %h", addr, expected_data, S_AXI_RDATA);
+            $error("[ERROR:] READ MISMATCH! Addr: %h, Exp: %h, Got: %h", addr, expected_data, S_AXI_RDATA);
         end else begin
-            $display("Read OK: %h", S_AXI_RDATA);
+            $display("[SUCCESS:] Read OK: %h", S_AXI_RDATA);
         end
         
         @(posedge clk);
         S_AXI_RREADY <= 1'b0;
         
         // Safety gap
-        // @(posedge clk);
+        @(posedge clk);
     end
     endtask
 
