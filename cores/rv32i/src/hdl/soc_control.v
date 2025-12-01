@@ -129,13 +129,13 @@ module soc_control (
         end else begin
             case (cpu_state)
                 CPU_RUNNING   : cpu_state <= (S_AXI_ARVALID  || S_AXI_AWVALID)  ? CPU_STOPPED : CPU_RUNNING;
-                CPU_STOPPED   : cpu_state <= (read_complete || write_complete) ? CPU_RUNNING   : CPU_STOPPED;
+                CPU_STOPPED   : cpu_state <= (read_complete  || write_complete) ? CPU_RUNNING : CPU_STOPPED;
                 default       : cpu_state <= CPU_RUNNING;
             endcase
         end
     end
     
-    assign cm_cpu_stop = (cpu_state == CPU_STOPPED) ? 1'b1 : 1'b0;
+    assign cm_cpu_stop   = (cpu_state == CPU_STOPPED) ? 1'b1 : 1'b0;
     assign deb_cpu_state = cpu_state;
 
     // Read process
@@ -214,8 +214,8 @@ module soc_control (
     // assigning the correct read or write address the signal controlling the register file
     // since there is only one address line shared by th read and write address two operations
     // cannot happend at once
-    assign cm_read_write_regfile_addr = (is_axi_read && !is_axi_write) ? read_index  : 
-                                        (!is_axi_read && is_axi_write) ? write_index : 0;
+    assign cm_read_write_regfile_addr = (is_axi_read  && !is_axi_write) ? read_index  : 
+                                        (!is_axi_read && is_axi_write)  ? write_index : 0;
     
     assign cm_regfile_we              = is_axi_write;
     assign cm_write_regfile_dat       = strobed_data;
