@@ -1,46 +1,36 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: ISAE
-// Engineer: Szymon Bogus
-// 
-// Create Date: 06/14/2025 07:39:41 PM
-// Design Name: 
-// Module Name: riscv_cpu
-// Project Name: rv32i_sc
-// Target Devices: Zybo Z7-20
-// Tool Versions: 
-// Description: Main module assembling entire core
-// 
-// Dependencies: rv32i_params.vh, rv32i_control.vh
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
+
 `include "../include/rv32i_params.vh"
 `include "../include/rv32i_control.vh"
+`include "../include/axi_configuration.vh"
 
 
-module riscv_cpu(
-    input clk,
-    input rst,
+module riscv_cpu (
+    input CLK,
+    input RSTn,
 
     input pc_stall,
 
-    // connections to instruction RAM
-    output [`RAM_ADDR_WIDTH-1:0] i_r_addr,
-    output                       i_r_enb,
-    input  [`DATA_WIDTH-1:0]     i_r_dat,
-
-    // connections to data RAM
-    output [`RAM_ADDR_WIDTH-1:0] d_w_addr,
-    output [`DATA_WIDTH-1:0]     d_w_dat,
-    output                       d_w_enb,
-    output [3:0]                 d_w_byte_enb,
-    output [`RAM_ADDR_WIDTH-1:0] d_r_addr,
-    output                       d_r_enb,
-    input  [`DATA_WIDTH-1:0]     d_r_dat,
+    // AXI4-lite connections to the memory
+    output                         M_AXI_AWVALID,
+    input                          M_AXI_AWREADY,
+    output [  `AXI_ADDR_WIDTH-1:0] M_AXI_AWADDR,
+    output [                  2:0] M_AXI_AWPROT,
+    output                         M_AXI_WVALID,
+    input                          M_AXI_WREADY,
+    output [  `AXI_DATA_WIDTH-1:0] M_AXI_WDATA,
+    output [`AXI_STROBE_WIDTH-1:0] M_AXI_WSTRB,
+    input                          M_AXI_BVALID,
+    output                         M_AXI_BREADY,
+    input  [                  1:0] M_AXI_BRESP,
+    output                         M_AXI_ARVALID,
+    input                          M_AXI_ARREADY,
+    output [  `AXI_ADDR_WIDTH-1:0] M_AXI_ARADDR,
+    output [                  2:0] M_AXI_ARPROT,
+    input                          M_AXI_RVALID,
+    output                         M_AXI_RREADY,
+    input  [  `AXI_DATA_WIDTH-1:0] M_AXI_RDATA,
+    input  [                  1:0] M_AXI_RRESP,
 
     // connections to SOC Control Module
     output [`DATA_WIDTH-1:0]     cm_read_regfile_dat,
@@ -50,162 +40,297 @@ module riscv_cpu(
     input  [`DATA_WIDTH-1:0]     cm_write_regfile_dat
 );
 
-    // =====   CPU Control   =====
-    // =====   start/stop    =====
-    // When the SOC Control Module wants to allow Fault Injection Module
-    // to inject faults or when the SOC Control Module wants to dump the
-    // register file it needs to stop the core to avoid operating on the register file
-    // while the core itself is using it
-    wire gated_clk;
-    assign gated_clk = clk & ~cm_cpu_stop;
+    // we have the following transactions, each one has ready and valid signals
+    // and associated data.
+    // - PC - INSTRUCTION - DECODED - ALU_RESULT (- MEM_RESULT) - NEXT_PC
 
-    // =====   Fetch stage   =====
-    reg  [`DATA_WIDTH-1:0]     pc;
-    wire [`DATA_WIDTH-1:0]     pc_next;
-    wire [`DATA_WIDTH-1:0]     pc_plus_4;
-    wire                       pc_select;
-    wire [`DATA_WIDTH-1:0]     immediate;
+    // PC
+    reg pc_valid, pc_ready;
+    reg [`DATA_WIDTH-1:0] pc;
 
-    wire [`DATA_WIDTH-1:0]     alu_result;
-    wire                       take_branch;
+    // INSTRUCTION
+    reg instruction_valid, instruction_ready;
+    wire [`DATA_WIDTH-1:0] instruction;
 
+    // DECODED
+    reg decoded_valid, decoded_ready;
     wire                       is_jump;
     wire                       is_jalr;
     wire                       is_branch;
-
-    always @(posedge gated_clk or posedge rst) begin
-        if (rst == 1'b1) begin
-            pc <= `BOOT_ADDR;
-        end else if (!pc_stall) begin
-            pc <= pc_next;
-        end
-    end
-
-    assign pc_plus_4 = pc + 32'd4;
-    assign pc_select = is_jump | (is_branch & take_branch);
-    assign pc_next = pc_select ? (is_jalr ? rs1 : pc) + immediate : pc_plus_4;
-
-    // instruction RAM wiring
-    wire [`DATA_WIDTH-1:0]     instruction;
-    assign i_r_addr          = pc[`RAM_ADDR_WIDTH-1:0];
-    assign i_r_enb           = 1'b1; // always enable reading
-    assign instruction       = i_r_dat;
-
-    // =====   Fetch stage    =====
-    // =====   Decode stage   =====
-
-    // Control module outputs
-    wire [1:0]                 wrt_back_src;
-    wire [1:0]                 second_add_src;
-
-    wire [`FUNC3_WIDTH-1:0]    func3;
+    wire [    `DATA_WIDTH-1:0] immediate;
+    wire [   `FUNC3_WIDTH-1:0] func3;
     wire [`REG_ADDR_WIDTH-1:0] rs1_addr;
     wire [`REG_ADDR_WIDTH-1:0] rs2_addr;
     wire [`REG_ADDR_WIDTH-1:0] rd_addr;
     wire                       alu_src1_is_pc;
     wire                       alu_src2_is_imm;
     wire                       use_mem;
-    wire                       mem_write;
+    wire                       mem_is_write;
     wire                       do_write_back;
     wire [`ALU_CTRL_WIDTH-1:0] alu_ctrl;
+    wire [    `DATA_WIDTH-1:0] rs1;
+    wire [    `DATA_WIDTH-1:0] rs2;
 
-    instruction_decode DECODE(
-        .instr(instruction),
-        .func3(func3),
-        .rs1_addr(rs1_addr),
-        .rs2_addr(rs2_addr),
-        .rd_addr(rd_addr),
-        .imm(immediate),
-        .alu_src1_is_pc(alu_src1_is_pc),
+    // EXECUTE_RESULT
+    reg execute_result_valid, execute_result_ready;
+    reg  [`DATA_WIDTH-1:0] write_back_data;
+    wire                   take_branch;
+    // take either or
+    reg                    alu_result_valid;
+    wire [`DATA_WIDTH-1:0] alu_result;
+    wire                   load_store_ready;
+    wire                   mem_result_valid;
+    wire                   mem_result_ready;
+
+    // NEXT_PC
+    reg next_pc_valid, next_pc_ready;
+    reg  [      `DATA_WIDTH-1:0] next_pc;
+
+
+    // load/store
+    reg  [      `DATA_WIDTH-1:0] mem_addr;
+    reg  [      `DATA_WIDTH-1:0] mem_write_data;
+    reg  [      `DATA_WIDTH-1:0] mem_read_data;
+    reg  [`AXI_STROBE_WIDTH-1:0] mem_write_strobe;
+    wire [      `DATA_WIDTH-1:0] mem_wb_data;  // parsed by byte_reader
+
+
+    // =====   Clocked Components    =====
+
+    // PC generator
+    // do not accept the next pc if we are stalled or the current pc has not
+    // yet been transferred to the fetch unit.
+    assign next_pc_ready = !pc_stall & !pc_valid;
+    reg pc_waiting;
+    always @(posedge CLK or negedge RSTn) begin
+        if (!RSTn) begin
+            pc <= `BOOT_ADDR;
+            pc_valid <= 1'b0;
+            pc_waiting <= 1'b1;
+        end else begin
+            if (next_pc_valid & next_pc_ready) begin
+                // NEXT_PC transaction
+                pc <= next_pc;
+                pc_valid <= 1'b1;
+            end else if (pc_valid & pc_ready) begin
+                // PC transaction
+                pc_valid <= 1'b0;
+            end else if (pc_waiting & !pc_stall) begin
+                // kick start cycle
+                pc_valid   <= 1'b1;
+                pc_waiting <= 1'b0;
+            end
+        end
+    end
+
+    reg [`DATA_WIDTH-1:0] instruction_latched;
+    assign instruction_ready = 1'b1;  // always ready
+    always @(posedge CLK or negedge RSTn) begin
+        if (!RSTn) begin
+            decoded_valid <= 1'b0;
+            instruction_latched <= `INSTR_WIDTH'b0;
+        end else begin
+            if (instruction_valid & instruction_ready) begin
+                // INSTRUCTION transaction
+                decoded_valid <= 1'b1;
+                instruction_latched <= instruction;
+            end else if (decoded_valid & decoded_ready) begin
+                // DECODED transaction
+                decoded_valid <= 1'b0;
+            end
+        end
+    end
+
+    // MUX between ALU and memory paths
+    assign decoded_ready = use_mem ? load_store_ready : 1'b1;
+    assign execute_result_valid = use_mem ? mem_result_valid : alu_result_valid;
+    assign mem_result_ready = use_mem ? execute_result_ready : 1'b0;
+    always @(posedge CLK or negedge RSTn) begin
+        if (!RSTn) begin
+            alu_result_valid <= 1'b0;
+        end else begin
+            if (decoded_valid & decoded_ready) begin
+                // DECODED transaction
+                if (!use_mem) alu_result_valid <= 1'b1;
+            end else if (execute_result_valid & execute_result_ready) begin
+                // EXECUTE_RESULT transaction
+                alu_result_valid <= 1'b0;
+            end
+        end
+    end
+
+    assign execute_result_ready = 1'b1;  // always ready
+    always @(posedge CLK or negedge RSTn) begin
+        if (!RSTn) begin
+            next_pc_valid <= 1'b0;
+        end else begin
+            if (execute_result_valid & execute_result_ready) begin
+                // EXECUTE_RESULT transaction
+                next_pc_valid <= 1'b1;
+            end else if (next_pc_valid & next_pc_ready) begin
+                // NEXT_PC transaction
+                next_pc_valid <= 1'b0;
+            end
+        end
+    end
+
+    register_file u_register_file (
+        .CLK (CLK),
+        .RSTn(RSTn),
+
+        .read_enable (1'b1),
+        .rs1_addr    (rs1_addr),
+        .rs2_addr    (rs2_addr),
+        .rs1         (rs1),
+        .rs2         (rs2),
+        // WRITE BACK on NEXT_PC transaction
+        .write_enable(do_write_back & next_pc_valid & next_pc_ready),
+        .write_addr  (rd_addr),
+        .write_data  (write_back_data)
+    );
+
+    memory_arbiter u_memory_arbiter (
+        .CLK (CLK),
+        .RSTn(RSTn),
+
+        .M_AXI_AWVALID(M_AXI_AWVALID),
+        .M_AXI_AWREADY(M_AXI_AWREADY),
+        .M_AXI_AWADDR (M_AXI_AWADDR),
+        .M_AXI_AWPROT (M_AXI_AWPROT),
+        .M_AXI_WVALID (M_AXI_WVALID),
+        .M_AXI_WREADY (M_AXI_WREADY),
+        .M_AXI_WDATA  (M_AXI_WDATA),
+        .M_AXI_WSTRB  (M_AXI_WSTRB),
+        .M_AXI_BVALID (M_AXI_BVALID),
+        .M_AXI_BREADY (M_AXI_BREADY),
+        .M_AXI_BRESP  (M_AXI_BRESP),
+        .M_AXI_ARVALID(M_AXI_ARVALID),
+        .M_AXI_ARREADY(M_AXI_ARREADY),
+        .M_AXI_ARADDR (M_AXI_ARADDR),
+        .M_AXI_ARPROT (M_AXI_ARPROT),
+        .M_AXI_RVALID (M_AXI_RVALID),
+        .M_AXI_RREADY (M_AXI_RREADY),
+        .M_AXI_RDATA  (M_AXI_RDATA),
+        .M_AXI_RRESP  (M_AXI_RRESP),
+
+        .pc_valid(pc_valid),
+        .pc_ready(pc_ready),
+        .pc(pc),
+        .instruction_valid(instruction_valid),
+        .instruction_ready(instruction_ready),
+        .instruction(instruction),
+
+        .load_store_valid       (decoded_valid && use_mem),
+        .load_store_ready       (load_store_ready),
+        .load_store_addr        (mem_addr),
+        .load_store_is_write    (mem_is_write),
+        .store_strobe           (mem_write_strobe),
+        .store_data             (mem_write_data),
+        .load_store_result_valid(mem_result_valid),
+        .load_store_result_ready(mem_result_ready),
+        .load_data              (mem_read_data)
+    );
+
+
+    // =====   Clocked Components    =====
+    // =====   Fetch stage   =====
+
+
+    // =====   Fetch stage    =====
+    // =====   Decode stage   =====
+
+    instruction_decode u_decode (
+        .instr          (instruction_latched),
+        .func3          (func3),
+        .rs1_addr       (rs1_addr),
+        .rs2_addr       (rs2_addr),
+        .rd_addr        (rd_addr),
+        .imm            (immediate),
+        .alu_src1_is_pc (alu_src1_is_pc),
         .alu_src2_is_imm(alu_src2_is_imm),
-        .use_mem(use_mem),
-        .mem_write(mem_write),
-        .is_branch(is_branch),
-        .is_jump(is_jump),
-        .is_jalr(is_jalr),
-        .do_write_back(do_write_back),
-        .alu_ctrl(alu_ctrl)
+        .use_mem        (use_mem),
+        .mem_is_write   (mem_is_write),
+        .is_branch      (is_branch),
+        .is_jump        (is_jump),
+        .is_jalr        (is_jalr),
+        .do_write_back  (do_write_back),
+        .alu_ctrl       (alu_ctrl)
     );
 
-    // Register file
+    // // In case SOC Control Module wants to
+    // // - read register file: it will use rs1_addr and rs1 fields given cm_cpu_stop == 1
+    // // - write register file: it will use write_enable, write_addr, write_data fields given cm_cpu_stop == 1
+    // // This module is unaffected by gating done to the input clock signal as it has to operate
+    // // even when the rest of the clock is put to halt
+    // register_file REGFILE(
+    //     .clk(clk), // this is the only module which receives the clock signal regardless cm_cpu_stop flag
+    //     .rst(rst), 
+    //     .read_enable(1'b1),
+    //     .rs2_addr(rs2_addr),
+    //     .rs1_addr(!cm_cpu_stop   ? rs1_addr        : cm_read_write_regfile_addr),
+    //     .rs1(rf_rs1_out),
+    //     .rs2(rs2),
+    //     .write_enable((!cm_cpu_stop && do_write_back) || (cm_cpu_stop && cm_regfile_we)), // if CPU is supposed to freeze in the middle of ADD/LW signal 
+    //                                                                                       // do_write_back will remain HIGH in case we only have here 
+    //                                                                                       // do_write_back || (cm_cpu_stop && cm_regfile_we)- 
+    //                                                                                       // this will overwrite the register that soc_control is trying to read. 
+    //                                                                                       // The current approach makes sure to ignore do_write_back when the CPU is stopped
+    //     .write_addr(!cm_cpu_stop ? rd_addr         : cm_read_write_regfile_addr),
+    //     .write_data(!cm_cpu_stop ? write_back_data : cm_write_regfile_dat)
+    // );
 
-    wire [`DATA_WIDTH-1:0]     rs1;
-    wire [`DATA_WIDTH-1:0]     rf_rs1_out;
-    wire [`DATA_WIDTH-1:0]     rs2;
-
-    reg  [`DATA_WIDTH-1:0]     write_back_data;
-
-    // In case SOC Control Module wants to
-    // - read register file: it will use rs1_addr and rs1 fields given cm_cpu_stop == 1
-    // - write register file: it will use write_enable, write_addr, write_data fields given cm_cpu_stop == 1
-    // This module is unaffected by gating done to the input clock signal as it has to operate
-    // even when the rest of the clock is put to halt
-    register_file REGFILE(
-        .clk(clk), // this is the only module which receives the clock signal regardless cm_cpu_stop flag
-        .rst(rst), 
-        .read_enable(1'b1),
-        .rs1_addr(!cm_cpu_stop   ? rs1_addr        : cm_read_write_regfile_addr),
-        .rs2_addr(rs2_addr),
-        .rs1(rf_rs1_out),
-        .rs2(rs2),
-        .write_enable((!cm_cpu_stop && do_write_back) || (cm_cpu_stop && cm_regfile_we)), // if CPU is supposed to freeze in the middle of ADD/LW signal 
-                                                                                          // do_write_back will remain HIGH in case we only have here 
-                                                                                          // do_write_back || (cm_cpu_stop && cm_regfile_we)- 
-                                                                                          // this will overwrite the register that soc_control is trying to read. 
-                                                                                          // The current approach makes sure to ignore do_write_back when the CPU is stopped
-        .write_addr(!cm_cpu_stop ? rd_addr         : cm_read_write_regfile_addr),
-        .write_data(!cm_cpu_stop ? write_back_data : cm_write_regfile_dat)
-    );
-
-    assign rs1                 = rf_rs1_out;
-    assign cm_read_regfile_dat = rf_rs1_out;
-
-    wire [`DATA_WIDTH-1:0]     mem_wb_data; // from byte_reader
-    wire                       mem_valid;   // from byte_reader
+    // assign rs1                 = rf_rs1_out;
+    // assign cm_read_regfile_dat = rf_rs1_out;
 
     // =====   Decode stage   =====
     // =====   Execute stage   =====
 
-    alu ALU(
-        .alu_ctrl(alu_ctrl),
-        .src1(alu_src1_is_pc  ? pc        : rs1),
-        .src2(alu_src2_is_imm ? immediate : rs2),
-        .result(alu_result),
+    alu u_alu (
+        .alu_ctrl   (alu_ctrl),
+        .src1       (alu_src1_is_pc ? pc : rs1),
+        .src2       (alu_src2_is_imm ? immediate : rs2),
+        .result     (alu_result),
         .take_branch(take_branch)
     );
 
-    wire [3:0]             byte_enb;
-    wire [`DATA_WIDTH-1:0] mem_write_data;
-    load_store_decoder LOAD_STORE_DECODER(
+    load_store_decoder u_load_store_decoder (
         .alu_result_addr(alu_result),
-        .func3(func3),
-        .reg_read(rs2),
-        .byte_enb(byte_enb),
-        .data(mem_write_data)
+        .func3          (func3),
+        .reg_read       (rs2),
+        .byte_enb       (mem_write_strobe),
+        .data           (mem_write_data)
     );
 
     // =====   Execute stage   =====
     // =====   Memory stage   =====
 
-    // data RAM wiring
-    assign d_w_addr          = {alu_result[`RAM_ADDR_WIDTH-1:2], 2'b00};
-    assign d_w_dat           = mem_write_data;
-    assign d_w_enb           = use_mem & mem_write;
-    assign d_w_byte_enb      = byte_enb; // from load store decoder
-    assign d_r_addr          = alu_result[`RAM_ADDR_WIDTH-1:0];
-    assign d_r_enb           = use_mem & !mem_write;
+    wire [`DATA_WIDTH-1:0] mem_addr_aux = use_mem ? rs1 + immediate : '0;
+    assign mem_addr = mem_is_write ? {mem_addr_aux[`DATA_WIDTH-1:2], 2'b00} : mem_addr_aux;
 
-    byte_reader BYTE_READER(
-        .mem_data(d_r_dat),
-        .func3(func3),
-        .byte_mask(byte_enb),
-        .wb_data(mem_wb_data),
-        .valid(mem_valid)
+    byte_reader u_byte_reader (
+        .mem_data (mem_read_data),
+        .func3    (func3),
+        .byte_mask(mem_write_strobe),
+        .wb_data  (mem_wb_data)
+        // ,
+        // .valid    (mem_valid)
     );
     // =====   Memory stage   =====
     // =====   Write back stage   =====
 
-    assign write_back_data = is_jump ? pc_plus_4 : use_mem ? mem_wb_data : alu_result;
+    wire [`DATA_WIDTH-1:0] pc_plus_4 = pc + 32'd4;
+    always @(*)
+        if (is_jump) begin
+            write_back_data = pc_plus_4;
+            next_pc = (is_jalr ? rs1 : pc) + immediate;
+        end else if (use_mem) begin
+            write_back_data = mem_wb_data;
+            next_pc = pc_plus_4;
+        end else begin
+            write_back_data = alu_result;
+            if (is_branch & take_branch) next_pc = pc + immediate;
+            else next_pc = pc_plus_4;
+        end
 
     // =====   Write back stage   =====
 
