@@ -148,7 +148,11 @@ module riscv_cpu(
         .rs2_addr(rs2_addr),
         .rs1(rf_rs1_out),
         .rs2(rs2),
-        .write_enable(do_write_back || (cm_cpu_stop && cm_regfile_we)),
+        .write_enable((!cm_cpu_stop && do_write_back) || (cm_cpu_stop && cm_regfile_we)), // if CPU is supposed to freeze in the middle of ADD/LW signal 
+                                                                                          // do_write_back will remain HIGH in case we only have here 
+                                                                                          // do_write_back || (cm_cpu_stop && cm_regfile_we)- 
+                                                                                          // this will overwrite the register that soc_control is trying to read. 
+                                                                                          // The current approach makes sure to ignore do_write_back when the CPU is stopped
         .write_addr(!cm_cpu_stop ? rd_addr         : cm_read_write_regfile_addr),
         .write_data(!cm_cpu_stop ? write_back_data : cm_write_regfile_dat)
     );
