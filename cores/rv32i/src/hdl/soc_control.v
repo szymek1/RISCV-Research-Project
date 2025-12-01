@@ -128,9 +128,7 @@ module soc_control (
             cpu_state <= CPU_RUNNING;
         end else begin
             case (cpu_state)
-                // CPU_RUNNING   : cpu_state <= (S_AXI_ARVALID  || S_AXI_AWVALID)  ? CPU_STOP_WAIT : CPU_RUNNING;
                 CPU_RUNNING   : cpu_state <= (S_AXI_ARVALID  || S_AXI_AWVALID)  ? CPU_STOPPED : CPU_RUNNING;
-                // CPU_STOP_WAIT : cpu_state <= CPU_STOPPED;
                 CPU_STOPPED   : cpu_state <= (read_complete || write_complete) ? CPU_RUNNING   : CPU_STOPPED;
                 default       : cpu_state <= CPU_RUNNING;
             endcase
@@ -145,53 +143,16 @@ module soc_control (
     reg r_data_valid_pending;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            is_axi_read        <= 1'b0;
+            is_axi_read          <= 1'b0;
             r_data_valid_pending <= 1'b0;
-            S_AXI_ARREADY_     <= 1'b1; 
-            S_AXI_RVALID_      <= 1'b0;
-            // axi_araddr_latched <= 0;
-            S_AXI_RDATA_       <= 0;
-            S_AXI_RRESP_       <= `AXI_RESP_OKAY;
+            S_AXI_ARREADY_       <= 1'b1; 
+            S_AXI_RVALID_        <= 1'b0;
+            S_AXI_RDATA_         <= 0;
+            S_AXI_RRESP_         <= `AXI_RESP_OKAY;
         end else begin
-            /*
-            if (S_AXI_ARVALID && !S_AXI_ARREADY_ && !is_axi_read && cpu_state == CPU_STOPPED) begin
-                // Making sure that SOC Control Module managed to stop the CPU
-                S_AXI_ARREADY_ <= 1'b1;
-                is_axi_read    <= 1'b1;
-            end else if (S_AXI_ARVALID && S_AXI_ARREADY_) begin
-                // Address handshake: slave is by default ready so the handshake happends immediately
-                //                    once the master issue the address
-                is_axi_read        <= 1'b1;
-                S_AXI_ARREADY_     <= 1'b0;              
-                S_AXI_RVALID_      <= 1'b1;  // data will be valid in the next cycle
-                S_AXI_RRESP_       <= `AXI_RESP_OKAY;
-                S_AXI_RDATA_       <= cm_read_regfile_dat;
-            end else if (S_AXI_RREADY && S_AXI_RVALID_) begin
-                // Transaction complete: master accepts the data
-                is_axi_read        <= 1'b0;
-                S_AXI_RVALID_      <= 1'b0;
-                S_AXI_ARREADY_     <= 1'b1;  // heres ready for the new read transaction
-            end
-            */
-            /*
             if (S_AXI_ARVALID && S_AXI_ARREADY_) begin
                 // Address handshake: slave is by default ready so the handshake happends immediately
                 //                    once the master issue the address
-                is_axi_read        <= 1'b1;
-                S_AXI_ARREADY_     <= 1'b0;              
-                S_AXI_RVALID_      <= 1'b1;  // data will be valid in the next cycle
-                S_AXI_RRESP_       <= `AXI_RESP_OKAY;
-                S_AXI_RDATA_       <= cm_read_regfile_dat;
-            end else if (S_AXI_RREADY && S_AXI_RVALID_) begin
-                // Transaction complete: master accepts the data
-                is_axi_read        <= 1'b0;
-                S_AXI_RVALID_      <= 1'b0;
-                S_AXI_ARREADY_     <= 1'b1;  // heres ready for the new read transaction
-            end
-            */
-            // 1. Address Handshake Phase
-            if (S_AXI_ARVALID && S_AXI_ARREADY_) begin
-                // Accept address and start the read cycle
                 is_axi_read        <= 1'b1;
                 S_AXI_ARREADY_     <= 1'b0;
                 
@@ -199,22 +160,16 @@ module soc_control (
                 // to propagate through 'cm_read_write_regfile_addr'
                 // and for the Register File to output data.
                 r_data_valid_pending <= 1'b1; 
-            end 
-            
-            // 2. Data Latch Phase (The Wait State)
-            else if (r_data_valid_pending) begin
+            end else if (r_data_valid_pending) begin
+                // Data latch phase
                 // Now that 'is_axi_read' has been 1 for a cycle, 
                 // the RF output 'cm_read_regfile_dat' is valid.
-                S_AXI_RVALID_      <= 1'b1;
-                S_AXI_RDATA_       <= cm_read_regfile_dat;
-                S_AXI_RRESP_       <= `AXI_RESP_OKAY;
+                S_AXI_RVALID_        <= 1'b1;
+                S_AXI_RDATA_         <= cm_read_regfile_dat;
+                S_AXI_RRESP_         <= `AXI_RESP_OKAY;
                 
-                // Clear the pending flag
                 r_data_valid_pending <= 1'b0;
-            end
-
-            // 3. Data Handshake Phase
-            else if (S_AXI_RREADY && S_AXI_RVALID_) begin
+            end else if (S_AXI_RREADY && S_AXI_RVALID_) begin
                 // Transaction complete: master accepts the data
                 is_axi_read        <= 1'b0;
                 S_AXI_RVALID_      <= 1'b0;
@@ -234,31 +189,6 @@ module soc_control (
             S_AXI_BVALID_      <= 1'b0;
             S_AXI_BRESP_       <= `AXI_RESP_OKAY;
         end else begin
-            
-            /*
-            if (S_AXI_AWVALID && !S_AXI_AWREADY_ && !is_axi_write && cpu_state == CPU_STOPPED) begin
-                // Making sure that SOC Control Module managed to stop the CPU
-                S_AXI_AWREADY_ <= 1'b1;
-                is_axi_write   <= 1'b1;
-            end else if (S_AXI_AWVALID && S_AXI_AWREADY_) begin
-                // Address handshake: slave is by default READY and master has to issue VALID
-                is_axi_write       <= 1'b1;
-                S_AXI_AWREADY_     <= 1'b0;
-                S_AXI_WREADY_      <= 1'b1;  
-            end else if (S_AXI_WVALID && S_AXI_WREADY_) begin
-                // Data handshake: slave is ready to accept new write data and it's waiting for the master to issue VALID
-                is_axi_write       <= 1'b1;
-                S_AXI_WREADY_      <= 1'b0;                     
-                S_AXI_BVALID_      <= 1'b1;       
-                S_AXI_BRESP_       <= `AXI_RESP_OKAY;
-            end else if (S_AXI_BVALID && S_AXI_BREADY) begin
-                // Response
-                is_axi_write       <= 1'b0;
-                S_AXI_BVALID_      <= 1'b0;
-                S_AXI_AWREADY_     <= 1'b1; // heres ready for the new write transaction
-            end
-            */
-            
             if (S_AXI_AWVALID && S_AXI_AWREADY_) begin
                 // Address handshake: slave is by default READY and master has to issue VALID
                 is_axi_write       <= 1'b1;
@@ -296,7 +226,7 @@ module soc_control (
     integer byte_id;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            strobed_data <= '0;
+            strobed_data <= 0;
         end else begin
             if (S_AXI_WVALID && S_AXI_WREADY_) begin
                 for (byte_id = 0; byte_id < `C_AXI_STROBE_WIDTH; byte_id = byte_id + 1) begin
