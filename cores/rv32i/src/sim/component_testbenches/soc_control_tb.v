@@ -133,16 +133,16 @@ module soc_control_tb ();
         $display("--- Testbench Starting ---");
 
         // Reset
-        RSTn = 1'b0;
+        RSTn          = 1'b0;
         S_AXI_AWVALID = 0;
-        S_AXI_WVALID = 0;
-        S_AXI_BREADY = 0;
+        S_AXI_WVALID  = 0;
+        S_AXI_BREADY  = 0;
         S_AXI_ARVALID = 0;
-        S_AXI_RREADY = 0;
-        S_AXI_ARADDR <= '0;
-        S_AXI_AWADDR = 0;
-        S_AXI_WDATA  = 0;
-        S_AXI_WSTRB  = 0;
+        S_AXI_RREADY  = 0;
+        S_AXI_ARADDR  = 0;
+        S_AXI_AWADDR  = 0;
+        S_AXI_WDATA   = 0;
+        S_AXI_WSTRB   = 0;
 
         #(CLK_PERIOD * 5);
         RSTn = 1'b1;
