@@ -1,10 +1,12 @@
 `timescale 1ns / 1ps
 
 `include "../include/rv32i_params.vh"
-`include "../include/rv32i_control.vh"
+`include "../include/utils.vh"
 `include "../include/axi_configuration.vh"
 
 module cm_and_core_tb ();
+
+    localparam data_folder = {`DATA_DIR, "s_type/sb/"};  // just an example program
 
     // --- Clock and Reset ---
     localparam CLK_PERIOD = 10;  // 10ns = 100MHz clock
@@ -160,6 +162,10 @@ module cm_and_core_tb ();
         #(CLK_PERIOD * 5);
         RSTn = 1'b1;
         $display("[%0t] Reset Released", $time);
+        #(CLK_PERIOD * 1);
+        $display("Loading data from %s", data_folder);
+        $readmemh({data_folder, "/memory.hex"}, u_mem.d_data);
+        $readmemh({data_folder, "/program.hex"}, u_mem.i_data);
         #(CLK_PERIOD * 2);
 
 
@@ -170,6 +176,19 @@ module cm_and_core_tb ();
         $display("[%0t] Read Reg 1 -> Expect 0xDEADBEEF", $time);
         axi_read(32'h0204, 32'hDEADBEEF, `AXI_RESP_OKAY);
 
+        #(CLK_PERIOD * 10);
+        `ASSERT(u_main.u_cpu.u_register_file.registers[5], `DATA_WIDTH'b0);
+        $display("[%0t] Single Step Core (lw x5, 0xAB)", $time);
+        axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        #(CLK_PERIOD * 10);
+        `ASSERT(u_main.u_cpu.u_register_file.registers[5], `DATA_WIDTH'hAB);
+        `ASSERT(u_main.u_cpu.u_register_file.registers[6], `DATA_WIDTH'b0);
+        $display("[%0t] Single Step Core (lw x6, 0xCD)", $time);
+        axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        #(CLK_PERIOD * 10);
+        `ASSERT(u_main.u_cpu.u_register_file.registers[6], `DATA_WIDTH'hCD);
+
+        #(CLK_PERIOD * 5);
         $display("\n--- TB Done ---\n");
         $finish;
     end

@@ -181,7 +181,7 @@ module riscv_cpu (
         .rs1         (rs1),
         .rs2         (rs2),
         // WRITE BACK on NEXT_PC transaction
-        .write_enable(do_write_back & next_pc_valid & next_pc_ready),
+        .write_enable(do_write_back && next_pc_valid  /* && next_pc_ready */),
         .write_addr  (rd_addr),
         .write_data  (write_back_data),
 

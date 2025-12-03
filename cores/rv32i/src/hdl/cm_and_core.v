@@ -52,6 +52,7 @@ module cm_and_core (
 );
 
     // connections between control module and RISC-V core
+    wire                       pc_stall;
     wire [`REG_ADDR_WIDTH-1:0] cm_regfile_addr;
     wire [    `DATA_WIDTH-1:0] cm_regfile_read_data;
     wire                       cm_regfile_write_enable;
@@ -82,6 +83,7 @@ module cm_and_core (
         .S_AXI_RDATA  (S_AXI_RDATA),
         .S_AXI_RRESP  (S_AXI_RRESP),
 
+        .pc_stall(pc_stall),
         .regfile_addr(cm_regfile_addr),
         .regfile_read_data(cm_regfile_read_data),
         .regfile_write_enable(cm_regfile_write_enable),
@@ -114,7 +116,7 @@ module cm_and_core (
         .M_AXI_RDATA  (M_AXI_RDATA),
         .M_AXI_RRESP  (M_AXI_RRESP),
 
-        .pc_stall(1'b1),  // TODO
+        .pc_stall(pc_stall),
         .cm_regfile_addr(cm_regfile_addr),
         .cm_regfile_read_data(cm_regfile_read_data),
         .cm_regfile_we(cm_regfile_write_enable),
