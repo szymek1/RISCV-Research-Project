@@ -57,24 +57,24 @@ module register_file (
                 registers[reg_id] <= 32'b0;
             end
         end else begin
-            if (write_enable && write_addr != '0) begin
+            if (write_enable && write_addr != `REG_ADDR_WIDTH'b0) begin
                 registers[write_addr] <= write_data;
-            end else if (extra_write_enable && extra_addr != '0) begin
+            end else if (extra_write_enable && extra_addr != `REG_ADDR_WIDTH'b0) begin
                 registers[extra_addr] <= extra_write_data;
             end
         end
     end
 
     always @(*) begin
-        rs1 = (rs1_addr == '0) ? 32'h0 : registers[rs1_addr];
-        rs2 = (rs2_addr == '0) ? 32'h0 : registers[rs2_addr];
+        rs1 = (rs1_addr == `REG_ADDR_WIDTH'b0) ? 32'h0 : registers[rs1_addr];
+        rs2 = (rs2_addr == `REG_ADDR_WIDTH'b0) ? 32'h0 : registers[rs2_addr];
     end
 
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
-            extra_read_data <= '0;
+            extra_read_data <= `DATA_WIDTH'b0;
         end else begin
-            extra_read_data <= (extra_addr == '0) ? 32'h0 : registers[extra_addr];
+            extra_read_data <= (extra_addr == `REG_ADDR_WIDTH'b0) ? 32'h0 : registers[extra_addr];
         end
     end
 
