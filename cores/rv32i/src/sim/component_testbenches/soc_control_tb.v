@@ -21,7 +21,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 `include "../../include/rv32i_params.vh"
 `include "../../include/axi_configuration.vh"
-
+`include "../include/cm_commands.vh"
 
 module soc_control_tb ();
 
@@ -152,61 +152,34 @@ module soc_control_tb ();
         // --- TEST 1: Basic Read/Write Verification ---
         // Write 0xDEADBEEF to Register 1
         $display("[%0t] Test 1: Write Reg 1 -> 0xDEADBEEF", $time);
-        axi_write(32'h0204, 32'hDEADBEEF, 4'b1111, `AXI_RESP_OKAY);
+        axi_write({`SUB_SEL_REGFILE, 1'b0, 5'd4, 2'b00}, 32'hDEADBEEF, 4'b1111, `AXI_RESP_OKAY);
 
         // Read Register 1
         $display("[%0t] Test 2: Read Reg 1 -> Expect 0xDEADBEEF", $time);
-        axi_read(32'h0204, 32'hDEADBEEF, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd4, 2'b00}, 32'hDEADBEEF, `AXI_RESP_OKAY);
 
         // --- TEST 2: Strobe (Partial Write) Verification ---
         // 1. Initialize Reg 2 with 0xFFFFFFFF
         $display("[%0t] Test 3: Write Reg 2 -> 0xFFFFFFFF", $time);
-        axi_write(32'h0208, 32'hFFFFFFFF, 4'b1111, `AXI_RESP_OKAY);
+        axi_write({`SUB_SEL_REGFILE, 1'b0, 5'd8, 2'b00}, 32'hFFFFFFFF, 4'b1111, `AXI_RESP_OKAY);
 
         // 2. Overwrite middle bytes (Bits 15:8 and 23:16) with 0x55, 0xAA
         // Strobe 0110 means only write to byte 1 and 2.
         // Data: 0x00AA5500
         // This should fail since we only allow writes to all 32 bits at once
         $display("[%0t] Test 4: Strobe Write Reg 2 (Mask 0110) -> 0x..AA55..", $time);
-        axi_write(32'h0208, 32'h00AA5500, 4'b0110, `AXI_RESP_SLVERR);
+        axi_write({`SUB_SEL_REGFILE, 1'b0, 5'd8, 2'b00}, 32'h00AA5500, 4'b0110, `AXI_RESP_SLVERR);
 
         // 3. Read Back. Expect 0xFFAA55FF
         $display("[%0t] Test 5: Read Reg 2 -> Expect still 0xFFFFFFFF", $time);
-        axi_read(32'h0208, 32'hFFFFFFFF, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd8, 2'b00}, 32'hFFFFFFFF, `AXI_RESP_OKAY);
 
         // Check that writing/reading to/from an non existant register 34 fails
         $display("[%0t] Test 6: Write Reg 34", $time);
-        axi_write(32'h0222, 32'hABABDEED, 4'b1111, `AXI_RESP_SLVERR);
-        axi_read(32'h0222, 32'b0, `AXI_RESP_SLVERR);
-
-        // --- TEST 3: Stalling Logic Check ---
-        // We will assert address valid but NOT data valid immediately
-        // to see if the CPU stops and WAITS.
-        $display("[%0t] Test 6: Stall Timing Check", $time);
-        @(posedge CLK);
-        S_AXI_ARADDR  <= 32'h4;
-        S_AXI_ARVALID <= 1'b1;
-
-        // Wait 1 cycle
-        @(posedge CLK);
-        #1;  // minor delay to account for the delat delay (on the waveforms everything
-             // looks fine even without it but the test didn't want to pass without it)
-        // if (cm_cpu_stop !== 1'b1) $error("CPU did not stop 1 cycle after ARVALID assertion!");
-
-        wait (!S_AXI_ARREADY);  // Wait for SOC to trigger ready
-        // if (cm_cpu_stop !== 1'b1) $error("CPU is not stopped while ARREADY is High!");
-        // else $display("[SUCCESS]: CPU is stopped during transaction.");
-
-        // Finish the manual read
-        S_AXI_ARVALID <= 1'b0;
-        S_AXI_RREADY  <= 1'b1;
-        wait (S_AXI_RVALID);
-        @(posedge CLK);
-        S_AXI_RREADY <= 1'b0;
+        axi_write({`SUB_SEL_REGFILE, 1'b1, 5'd2, 2'b00}, 32'hABABDEED, 4'b1111, `AXI_RESP_SLVERR);
+        axi_read({`SUB_SEL_REGFILE, 1'b1, 5'd2, 2'b00}, 32'b0, `AXI_RESP_SLVERR);
 
         #(CLK_PERIOD * 5);
-        // if (cm_cpu_stop !== 1'b0) $error("CPU did not resume after transaction!");
-        // else $display("[SUCCESS]: CPU resumed after transaction.");
 
         $display("\n--- TB Done ---\n");
         $finish;

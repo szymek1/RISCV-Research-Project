@@ -3,6 +3,7 @@
 `include "../include/rv32i_params.vh"
 `include "../include/utils.vh"
 `include "../include/axi_configuration.vh"
+`include "../include/cm_commands.vh"
 
 module cm_and_core_tb ();
 
@@ -166,48 +167,48 @@ module cm_and_core_tb ();
         $display("Loading data from %s", data_folder);
         $readmemh({data_folder, "/memory.hex"}, u_mem.d_data);
         $readmemh({data_folder, "/program.hex"}, u_mem.i_data);
-        #(CLK_PERIOD * 2);
-
-
-        $display("[%0t] Read Reg 4 -> Expect 0x00000000", $time);
-        axi_read(32'h0204, 32'h00000000, `AXI_RESP_OKAY);
-        $display("[%0t] Write Reg 4 -> 0xDEADBEEF", $time);
-        axi_write(32'h0204, 32'hDEADBEEF, 4'b1111, `AXI_RESP_OKAY);
-        $display("[%0t] Read Reg 4 -> Expect 0xDEADBEEF", $time);
-        axi_read(32'h0204, 32'hDEADBEEF, `AXI_RESP_OKAY);
-
         #(CLK_PERIOD * 10);
-        `ASSERT(u_main.u_cpu.u_register_file.registers[5], `DATA_WIDTH'b0)
+
         $display("[%0t] Read Reg 5 -> Expect 0x00000000", $time);
-        axi_read(32'h0205, 32'h00000000, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd5, 2'b00}, 32'h00000000, `AXI_RESP_OKAY);
         $display("[%0t] Single Step Core (lw x5, 0xAB)", $time);
-        axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        axi_write({`SUB_SEL_CTRL, `CTRL_REG_STEP}, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
         #(CLK_PERIOD * 10);  // give core time to execute
         $display("[%0t] Read Reg 5 -> Expect 0x000000AB", $time);
-        axi_read(32'h0205, 32'h000000AB, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd5, 2'b00}, 32'h000000AB, `AXI_RESP_OKAY);
         $display("[%0t] Read Reg 6 -> Expect 0x00000000", $time);
-        axi_read(32'h0206, 32'h00000000, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd6, 2'b00}, 32'h00000000, `AXI_RESP_OKAY);
         $display("[%0t] Single Step Core (lw x6, 0xCD)", $time);
-        axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        axi_write({`SUB_SEL_CTRL, `CTRL_REG_STEP}, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
         #(CLK_PERIOD * 10);  // give core time to execute
         $display("[%0t] Read Reg 6 -> Expect 0x000000CD", $time);
-        axi_read(32'h0206, 32'h000000CD, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd6, 2'b00}, 32'h000000CD, `AXI_RESP_OKAY);
 
-        $display("[%0t] Read Reg 6 -> Expect 0x000000CD", $time);
-        axi_read(32'h0206, 32'h000000CD, `AXI_RESP_OKAY);
-        $display("[%0t] Read Status Reg -> Expect 0x00000001 (pc_stall)", $time);
-        axi_read(32'h0100, 32'h00000001, `AXI_RESP_OKAY);
+        $display("[%0t] Read Status Reg -> Expect 0x00000001 (pc stalled)", $time);
+        axi_read({`SUB_SEL_CTRL, `CTRL_REG_STATUS}, 32'h00000001, `AXI_RESP_OKAY);
         $display("[%0t] Read PC -> Expect 0x00001008", $time);
-        axi_read(32'h0104, 32'h00001008, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_CTRL, `CTRL_REG_PC}, 32'h00001008, `AXI_RESP_OKAY);
         $display("[%0t] Write PC -> 0x0000100C (skip one instruction)", $time);
-        axi_write(32'h0104, 32'h0000100C, 4'b1111, `AXI_RESP_OKAY);
+        axi_write({`SUB_SEL_CTRL, `CTRL_REG_PC}, 32'h0000100C, 4'b1111, `AXI_RESP_OKAY);
         $display("[%0t] Read PC -> Expect 0x0000100C", $time);
-        axi_read(32'h0104, 32'h0000100C, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_CTRL, `CTRL_REG_PC}, 32'h0000100C, `AXI_RESP_OKAY);
 
         $display("[%0t] Single Step Core (sb x5, 0(x0)", $time);
-        axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        axi_write({`SUB_SEL_CTRL, `CTRL_REG_STEP}, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
         $display("[%0t] Read Reg 7 -> Expect 0x00000000 since (lw x7, 0xEF) was skipped", $time);
-        axi_read(32'h0207, 32'h00000000, `AXI_RESP_OKAY);
+        axi_read({`SUB_SEL_REGFILE, 1'b0, 5'd7, 2'b00}, 32'h00000000, `AXI_RESP_OKAY);
+
+        $display("[%0t] Set core to freerun", $time);
+        axi_write({`SUB_SEL_CTRL, `CTRL_REG_START}, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        $display("[%0t] Read Status Reg -> Expect 0x00000000 (pc not stalled)", $time);
+        axi_read({`SUB_SEL_CTRL, `CTRL_REG_STATUS}, 32'h00000000, `AXI_RESP_OKAY);
+        #(CLK_PERIOD * 100);  // give core time to execute
+        $display("[%0t] Stop core", $time);
+        axi_write({`SUB_SEL_CTRL, `CTRL_REG_STOP}, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        $display("[%0t] Read Status Reg -> Expect 0x00000001 (pc stalled)", $time);
+        axi_read({`SUB_SEL_CTRL, `CTRL_REG_STATUS}, 32'h00000001, `AXI_RESP_OKAY);
+        $display("[%0t] Read PC -> Expect 0x00001020 (end of program)", $time);
+        axi_read({`SUB_SEL_CTRL, `CTRL_REG_PC}, 32'h00001020, `AXI_RESP_OKAY);
 
         #(CLK_PERIOD * 5);
         $display("\n--- TB Done ---\n");

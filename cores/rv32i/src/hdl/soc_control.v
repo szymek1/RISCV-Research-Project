@@ -30,36 +30,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 `include "../include/rv32i_params.vh"
 `include "../include/axi_configuration.vh"
-
-// Inside this AXI slave we need to multiplex between different sub components:
-// - register file
-// - other registers of the core (PC)
-// - control options (starting / stopping the core)
-// Selecting which of these to talk to based on the address.
-// The lowest `SUB_ADDR_WIDTH bits are used to specify the address within the
-// component.
-// The next `SUB_SEL_WIDTH bits are used to specify which component to talk to.
-// The upper bits are ignored so this AXI slave can be placed freely in the
-// masters memory space.
-//
-//  Layout (h are the high bits, assummed to be used by the interconnect):
-// - hhhh 01rr: control register r. one of the following
-//   - 00: Status
-//   - 01: Start core
-//   - 02: Stop core
-//   - 03: Step core
-//   - 04: PC
-// - hhhh 02rr: CPU register r (0 to 31 used to refer to x0 to x31)
-`define SUB_ADDR_WIDTH 8
-`define SUB_SEL_WIDTH 8
-`define USED_ADDR_WIDTH (`SUB_SEL_WIDTH+`SUB_ADDR_WIDTH)
-`define SUB_SEL_CTRL `SUB_SEL_WIDTH'h01
-`define SUB_SEL_REGFILE `SUB_SEL_WIDTH'h02
-`define CTRL_REG_STATUS `SUB_ADDR_WIDTH'h00
-`define CTRL_REG_START `SUB_ADDR_WIDTH'h01
-`define CTRL_REG_STOP `SUB_ADDR_WIDTH'h02
-`define CTRL_REG_STEP `SUB_ADDR_WIDTH'h03
-`define CTRL_REG_PC `SUB_ADDR_WIDTH'h04
+`include "../include/cm_commands.vh"
 
 // In theroy, _WAIT_DONE and _RESP could be condensed into one state where the
 // result is immediately returned. However, at this state we do not really care
@@ -203,6 +174,8 @@ module soc_control (
                 end
             endcase
         end
+    wire sub_addr_aligned = (sub_addr[1:0] == 2'b00);  // Adress aligned to 32 bit
+    wire write_strobe_full = (latched_write_strobe == `AXI_STROBE_WIDTH'b1111);
 
     // Read/write collect the responses
     reg regfile_op_successful;
@@ -249,9 +222,12 @@ module soc_control (
     // Implemented as asynchronous logic here since we just forward the data
     // from/to the actual register file.
     wire regfile_selected = (sub_selector == `SUB_SEL_REGFILE);
-    wire [`REG_ADDR_WIDTH-1:0] regfile_sub_addr = sub_addr[`REG_ADDR_WIDTH-1:0];
-    wire regfile_read_valid = regfile_selected && (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH] == '0);
-    wire regfile_write_valid = regfile_read_valid && (latched_write_strobe == '1);
+    // each register is 4 byte wide -> shifted by 2 bits
+    // make sure that we do not try to access a register >=32
+    wire regfile_addr_in_bounds = (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH+2] == '0);
+    wire [`REG_ADDR_WIDTH-1:0] regfile_sub_addr = sub_addr[`REG_ADDR_WIDTH-1+2:2];
+    wire regfile_read_valid = regfile_selected && sub_addr_aligned && regfile_addr_in_bounds;
+    wire regfile_write_valid = regfile_read_valid && write_strobe_full;
     always @(*) begin
         regfile_addr = `REG_ADDR_WIDTH'b0;
         regfile_write_enable = 1'b0;
@@ -277,21 +253,18 @@ module soc_control (
 
     // Control registers
     wire control_selected = (sub_selector == `SUB_SEL_CTRL);
-    reg control_address_valid;
-    reg control_write_to_read_only;
+    reg  control_address_valid;
     wire control_read_valid = control_selected && control_address_valid;
-    wire control_write_valid = control_read_valid && (latched_write_strobe == '1) && !control_write_to_read_only;
+    wire control_write_valid = control_read_valid && (latched_write_strobe == '1);
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
             pc_stall <= 1'b1;
             control_read_data <= `DATA_WIDTH'b0;
             control_address_valid <= 1'b0;
-            control_write_to_read_only <= 1'b0;
         end else begin
             case (state)
                 `STATE_IDLE: begin
                     control_address_valid <= 1'b0;
-                    control_write_to_read_only <= 1'b0;
                 end
                 `STATE_READ_ISSUE: begin
                     if (control_selected)
@@ -317,10 +290,19 @@ module soc_control (
                 `STATE_WRITE_ISSUE: begin
                     if (control_selected)
                         case (sub_addr)
-                            `CTRL_REG_START: pc_stall <= 1'b0;
-                            `CTRL_REG_STOP: pc_stall <= 1'b1;
-                            `CTRL_REG_STEP: pc_stall <= 1'b0;
-                            default: control_write_to_read_only <= 1'b1;
+                            `CTRL_REG_START: begin
+                                control_address_valid <= 1'b1;
+                                pc_stall <= 1'b0;
+                            end
+                            `CTRL_REG_STOP: begin
+                                control_address_valid <= 1'b1;
+                                pc_stall <= 1'b1;
+                            end
+                            `CTRL_REG_STEP: begin
+                                control_address_valid <= 1'b1;
+                                pc_stall <= 1'b0;
+                            end
+                            `CTRL_REG_PC: control_address_valid <= 1'b1;
                         endcase
                 end
                 `STATE_WRITE_WAIT_DONE: begin
