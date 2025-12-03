@@ -128,7 +128,7 @@ module soc_control (
             `STATE_IDLE: S_AXI_ARREADY = 1'b1;
             `STATE_READ_RESP: begin
                 S_AXI_RVALID = 1'b1;
-                S_AXI_RDATA  = op_successful ? read_data : '0;
+                S_AXI_RDATA  = op_successful ? read_data : `DATA_WIDTH'b0;
                 S_AXI_RRESP  = op_successful ? `AXI_RESP_OKAY : `AXI_RESP_SLVERR;
             end
         endcase
@@ -174,6 +174,12 @@ module soc_control (
                 end
             endcase
         end
+        
+    wire [ `SUB_SEL_WIDTH-1:0] sub_selector;
+    wire [`SUB_ADDR_WIDTH-1:0] sub_addr;
+    assign sub_selector = latched_address[`USED_ADDR_WIDTH-1:`SUB_ADDR_WIDTH];
+    assign sub_addr = latched_address[`SUB_ADDR_WIDTH-1:0];
+        
     wire sub_addr_aligned = (sub_addr[1:0] == 2'b00);  // Adress aligned to 32 bit
     wire write_strobe_full = (latched_write_strobe == `AXI_STROBE_WIDTH'b1111);
 
@@ -192,7 +198,7 @@ module soc_control (
     always @(posedge CLK or negedge RSTn)
         if (!RSTn) begin
             op_successful <= 1'b0;
-            read_data <= '0;
+            read_data <= `DATA_WIDTH'b0;
         end else if (op_done) begin  // on state transition from _WAIT_DONE to _RESP
             case (sub_selector)
                 `SUB_SEL_CTRL: begin
@@ -210,11 +216,6 @@ module soc_control (
             endcase
         end
 
-    wire [ `SUB_SEL_WIDTH-1:0] sub_selector;
-    wire [`SUB_ADDR_WIDTH-1:0] sub_addr;
-    assign sub_selector = latched_address[`USED_ADDR_WIDTH-1:`SUB_ADDR_WIDTH];
-    assign sub_addr = latched_address[`SUB_ADDR_WIDTH-1:0];
-
     // Register File
     // There are only 32 Registers, so reads/write to larger address are not
     // valid. Furthermore, writes to x0 are not allowed and all 32 bits have to
@@ -224,7 +225,7 @@ module soc_control (
     wire regfile_selected = (sub_selector == `SUB_SEL_REGFILE);
     // each register is 4 byte wide -> shifted by 2 bits
     // make sure that we do not try to access a register >=32
-    wire regfile_addr_in_bounds = (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH+2] == '0);
+    wire regfile_addr_in_bounds = (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH+2] == 1'b0);
     wire [`REG_ADDR_WIDTH-1:0] regfile_sub_addr = sub_addr[`REG_ADDR_WIDTH-1+2:2];
     wire regfile_read_valid = regfile_selected && sub_addr_aligned && regfile_addr_in_bounds;
     wire regfile_write_valid = regfile_read_valid && write_strobe_full;
@@ -254,8 +255,8 @@ module soc_control (
     // Control registers
     wire control_selected = (sub_selector == `SUB_SEL_CTRL);
     reg  control_address_valid;
-    wire control_read_valid = control_selected && control_address_valid;
-    wire control_write_valid = control_read_valid && (latched_write_strobe == '1);
+    wire control_read_valid = control_selected && control_address_valid && sub_addr_aligned;
+    wire control_write_valid = control_read_valid && write_strobe_full;
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
             pc_stall <= 1'b1;
