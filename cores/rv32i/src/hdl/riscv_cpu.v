@@ -50,11 +50,12 @@ module riscv_cpu (
     reg [`DATA_WIDTH-1:0] pc;
 
     // INSTRUCTION
-    reg instruction_valid, instruction_ready;
+    wire instruction_valid, instruction_ready;
     wire [`DATA_WIDTH-1:0] instruction;
 
     // DECODED
-    reg decoded_valid, decoded_ready;
+    reg  decoded_valid;
+    wire decoded_ready;
     wire                       is_jump;
     wire                       is_jalr;
     wire                       is_branch;
@@ -73,7 +74,7 @@ module riscv_cpu (
     wire [    `DATA_WIDTH-1:0] rs2;
 
     // EXECUTE_RESULT
-    reg execute_result_valid, execute_result_ready;
+    wire execute_result_valid, execute_result_ready;
     reg  [`DATA_WIDTH-1:0] write_back_data;
     wire                   take_branch;
     // take either or
@@ -84,12 +85,13 @@ module riscv_cpu (
     wire                   mem_result_ready;
 
     // NEXT_PC
-    reg next_pc_valid, next_pc_ready;
+    reg  next_pc_valid;
+    wire next_pc_ready;
     reg  [      `DATA_WIDTH-1:0] next_pc;
 
 
     // load/store
-    reg  [      `DATA_WIDTH-1:0] mem_addr;
+    wire [      `DATA_WIDTH-1:0] mem_addr;
     reg  [      `DATA_WIDTH-1:0] mem_write_data;
     reg  [      `DATA_WIDTH-1:0] mem_read_data;
     reg  [`AXI_STROBE_WIDTH-1:0] mem_write_strobe;
@@ -283,7 +285,7 @@ module riscv_cpu (
     // =====   Execute stage   =====
     // =====   Memory stage   =====
 
-    wire [`DATA_WIDTH-1:0] mem_addr_aux = use_mem ? rs1 + immediate : '0;
+    wire [`DATA_WIDTH-1:0] mem_addr_aux = use_mem ? rs1 + immediate : `DATA_WIDTH'b0;
     assign mem_addr = mem_is_write ? {mem_addr_aux[`DATA_WIDTH-1:2], 2'b00} : mem_addr_aux;
 
     byte_reader u_byte_reader (
