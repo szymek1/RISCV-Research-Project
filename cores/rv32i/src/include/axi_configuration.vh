@@ -7,6 +7,9 @@
 `define AXI_STROBE_WIDTH 4
 `define AXI_ADDR_LSB $clog2(`AXI_DATA_WIDTH / 8)    // bits used for the byte offset
 
+// ARPROT & AWPROT flags
+`define AXI_PROT_WIDTH 3
+
 // BRESP & RRESP flags
 `define AXI_RESP_WIDTH 2
 `define AXI_RESP_OKAY 2'b00

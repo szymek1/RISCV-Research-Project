@@ -14,25 +14,25 @@ module full_cpu ();
     wire                         AXI_AWVALID;
     wire                         AXI_AWREADY;
     wire [  `AXI_ADDR_WIDTH-1:0] AXI_AWADDR;
-    wire [                  2:0] AXI_AWPROT;
+    wire [  `AXI_PROT_WIDTH-1:0] AXI_AWPROT;
     wire                         AXI_WVALID;
     wire                         AXI_WREADY;
     wire [  `AXI_DATA_WIDTH-1:0] AXI_WDATA;
     wire [`AXI_STROBE_WIDTH-1:0] AXI_WSTRB;
     wire                         AXI_BVALID;
     wire                         AXI_BREADY;
-    wire [                  1:0] AXI_BRESP;
+    wire [  `AXI_RESP_WIDTH-1:0] AXI_BRESP;
     wire                         AXI_ARVALID;
     wire                         AXI_ARREADY;
     wire [  `AXI_ADDR_WIDTH-1:0] AXI_ARADDR;
-    wire [                  2:0] AXI_ARPROT;
+    wire [  `AXI_PROT_WIDTH-1:0] AXI_ARPROT;
     wire                         AXI_RVALID;
     wire                         AXI_RREADY;
     wire [  `AXI_DATA_WIDTH-1:0] AXI_RDATA;
-    wire [                  1:0] AXI_RRESP;
+    wire [  `AXI_RESP_WIDTH-1:0] AXI_RRESP;
 
 
-    // Memory
+    // Mocked Memory
     axi_memory_mock u_mem (
         .CLK (CLK),
         .RSTn(RSTn),

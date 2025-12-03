@@ -152,32 +152,32 @@ module soc_control_tb ();
         // --- TEST 1: Basic Read/Write Verification ---
         // Write 0xDEADBEEF to Register 1
         $display("[%0t] Test 1: Write Reg 1 -> 0xDEADBEEF", $time);
-        axi_write(32'h4, 32'hDEADBEEF, 4'b1111, `AXI_RESP_OKAY);
+        axi_write(32'h0204, 32'hDEADBEEF, 4'b1111, `AXI_RESP_OKAY);
 
         // Read Register 1
         $display("[%0t] Test 2: Read Reg 1 -> Expect 0xDEADBEEF", $time);
-        axi_read(32'h4, 32'hDEADBEEF, `AXI_RESP_OKAY);
+        axi_read(32'h0204, 32'hDEADBEEF, `AXI_RESP_OKAY);
 
         // --- TEST 2: Strobe (Partial Write) Verification ---
         // 1. Initialize Reg 2 with 0xFFFFFFFF
         $display("[%0t] Test 3: Write Reg 2 -> 0xFFFFFFFF", $time);
-        axi_write(32'h8, 32'hFFFFFFFF, 4'b1111, `AXI_RESP_OKAY);
+        axi_write(32'h0208, 32'hFFFFFFFF, 4'b1111, `AXI_RESP_OKAY);
 
         // 2. Overwrite middle bytes (Bits 15:8 and 23:16) with 0x55, 0xAA
         // Strobe 0110 means only write to byte 1 and 2.
         // Data: 0x00AA5500
         // This should fail since we only allow writes to all 32 bits at once
         $display("[%0t] Test 4: Strobe Write Reg 2 (Mask 0110) -> 0x..AA55..", $time);
-        axi_write(32'h8, 32'h00AA5500, 4'b0110, `AXI_RESP_SLVERR);
+        axi_write(32'h0208, 32'h00AA5500, 4'b0110, `AXI_RESP_SLVERR);
 
         // 3. Read Back. Expect 0xFFAA55FF
         $display("[%0t] Test 5: Read Reg 2 -> Expect still 0xFFFFFFFF", $time);
-        axi_read(32'h8, 32'hFFFFFFFF, `AXI_RESP_OKAY);
+        axi_read(32'h0208, 32'hFFFFFFFF, `AXI_RESP_OKAY);
 
         // Check that writing/reading to/from an non existant register 34 fails
         $display("[%0t] Test 6: Write Reg 34", $time);
-        axi_write(32'h22, 32'hABABDEED, 4'b1111, `AXI_RESP_SLVERR);
-        axi_read(32'h22, 32'b0, `AXI_RESP_SLVERR);
+        axi_write(32'h0222, 32'hABABDEED, 4'b1111, `AXI_RESP_SLVERR);
+        axi_read(32'h0222, 32'b0, `AXI_RESP_SLVERR);
 
         // --- TEST 3: Stalling Logic Check ---
         // We will assert address valid but NOT data valid immediately

@@ -41,11 +41,20 @@
 // The next `SUB_SEL_WIDTH bits are used to specify which component to talk to.
 // The upper bits are ignored so this AXI slave can be placed freely in the
 // masters memory space.
+//
+//  Layout (h are the high bits, assummed to be used by the interconnect):
+// - hhhh 01rr: control register r. one of the following
+//   - 00: Status
+//   - 01: Start core
+//   - 02: Stop core
+//   - 03: Step core
+//   - 04: PC
+// - hhhh 02rr: CPU register r (0 to 31 used to refer to x0 to x31)
 `define SUB_ADDR_WIDTH 8
 `define SUB_SEL_WIDTH 8
 `define USED_ADDR_WIDTH (`SUB_SEL_WIDTH+`SUB_ADDR_WIDTH)
-`define SUB_SEL_REGISTER_FILE `SUB_SEL_WIDTH'h00
-`define SUB_SEL_PC `SUB_SEL_WIDTH'h01
+`define SUB_SEL_CTLR `SUB_SEL_WIDTH'h01
+`define SUB_SEL_REGFILE `SUB_SEL_WIDTH'h02
 
 // In theroy, _WAIT_DONE and _RESP could be condensed into one state where the
 // result is immediately returned. However, at this state we do not really care
@@ -81,7 +90,7 @@ module soc_control (
     output reg                         S_AXI_AWREADY,
     input                              S_AXI_AWVALID,
     input      [  `AXI_ADDR_WIDTH-1:0] S_AXI_AWADDR,
-    input      [                  2:0] S_AXI_AWPROT,
+    input      [  `AXI_PROT_WIDTH-1:0] S_AXI_AWPROT,
     // AXI write data and write strobe
     output reg                         S_AXI_WREADY,
     input                              S_AXI_WVALID,
@@ -95,7 +104,7 @@ module soc_control (
     output reg                         S_AXI_ARREADY,
     input                              S_AXI_ARVALID,
     input      [  `AXI_ADDR_WIDTH-1:0] S_AXI_ARADDR,
-    input      [                  2:0] S_AXI_ARPROT,
+    input      [  `AXI_PROT_WIDTH-1:0] S_AXI_ARPROT,
     // AXI read data and response
     output reg                         S_AXI_RVALID,
     output reg [  `AXI_DATA_WIDTH-1:0] S_AXI_RDATA,
@@ -192,8 +201,8 @@ module soc_control (
     always @(*)
         if (state == `STATE_READ_WAIT_DONE || state == `STATE_WRITE_WAIT_DONE) begin
             case (sub_selector)
-                `SUB_SEL_REGISTER_FILE: op_done = 1'b1;  // takes one cycle
-                default:                op_done = 1'b1;  // invalid op always done
+                `SUB_SEL_REGFILE: op_done = 1'b1;  // takes one cycle
+                default:          op_done = 1'b1;  // invalid op always done
             endcase
         end else op_done = 1'b0;
     always @(posedge CLK or negedge RSTn)
@@ -202,7 +211,7 @@ module soc_control (
             read_data <= '0;
         end else if (op_done) begin  // on state transition from _WAIT_DONE to _RESP
             case (sub_selector)
-                `SUB_SEL_REGISTER_FILE: begin
+                `SUB_SEL_REGFILE: begin
                     op_successful <= regfile_op_successful;
                     read_data <= regfile_read_data;
                 end
@@ -223,7 +232,7 @@ module soc_control (
     // Furthermore, writes to x0 are not allowed and all 32 bits have to be written at once.
     wire [`REG_ADDR_WIDTH-1:0] regfile_sub_addr = sub_addr[`REG_ADDR_WIDTH-1:0];
     wire regfile_read_valid = (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH] == '0);
-    wire regfile_write_valid = regfile_read_valid && sub_addr != '0 && (latched_write_strobe == '1);
+    wire regfile_write_valid = regfile_read_valid && (latched_write_strobe == '1);
     always @(*) begin
         regfile_addr = `REG_ADDR_WIDTH'b0;
         regfile_write_enable = 1'b0;
@@ -241,5 +250,7 @@ module soc_control (
             `STATE_WRITE_WAIT_DONE: regfile_op_successful <= regfile_write_valid;
         endcase
     end
+
+
 
 endmodule
