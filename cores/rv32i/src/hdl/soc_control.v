@@ -85,6 +85,9 @@ module soc_control (
 
     // connections to RISC-V register file
     output reg                       pc_stall,
+    input      [    `DATA_WIDTH-1:0] pc_read_data,
+    output reg                       pc_write_enable,
+    output reg [    `DATA_WIDTH-1:0] pc_write_data,
     output reg [`REG_ADDR_WIDTH-1:0] regfile_addr,
     input      [    `DATA_WIDTH-1:0] regfile_read_data,
     output reg                       regfile_write_enable,
@@ -245,14 +248,14 @@ module soc_control (
     // be written at once.
     // Implemented as asynchronous logic here since we just forward the data
     // from/to the actual register file.
+    wire regfile_selected = (sub_selector == `SUB_SEL_REGFILE);
     wire [`REG_ADDR_WIDTH-1:0] regfile_sub_addr = sub_addr[`REG_ADDR_WIDTH-1:0];
-    wire regfile_read_valid = (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH] == '0);
+    wire regfile_read_valid = regfile_selected && (sub_addr[`SUB_ADDR_WIDTH-1:`REG_ADDR_WIDTH] == '0);
     wire regfile_write_valid = regfile_read_valid && (latched_write_strobe == '1);
     always @(*) begin
         regfile_addr = `REG_ADDR_WIDTH'b0;
         regfile_write_enable = 1'b0;
         regfile_write_data = `DATA_WIDTH'b0;
-        regfile_op_successful = 1'b0;
         case (state)
             `STATE_READ_ISSUE: begin
                 regfile_addr = regfile_read_valid ? regfile_sub_addr : `REG_ADDR_WIDTH'b0;
@@ -260,16 +263,24 @@ module soc_control (
             `STATE_WRITE_ISSUE: begin
                 regfile_addr = regfile_write_valid ? regfile_sub_addr : `REG_ADDR_WIDTH'b0;
                 regfile_write_enable = regfile_write_valid;
-                regfile_write_data = latched_write_data;
+                regfile_write_data = regfile_write_valid ? latched_write_data : `DATA_WIDTH'b0;
             end
+        endcase
+    end
+    always @(*) begin
+        regfile_op_successful = 1'b0;
+        case (state)
             `STATE_READ_WAIT_DONE:  regfile_op_successful = regfile_read_valid;
             `STATE_WRITE_WAIT_DONE: regfile_op_successful = regfile_write_valid;
         endcase
     end
 
     // Control registers
+    wire control_selected = (sub_selector == `SUB_SEL_CTRL);
     reg control_address_valid;
     reg control_write_to_read_only;
+    wire control_read_valid = control_selected && control_address_valid;
+    wire control_write_valid = control_read_valid && (latched_write_strobe == '1) && !control_write_to_read_only;
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
             pc_stall <= 1'b1;
@@ -279,21 +290,38 @@ module soc_control (
         end else begin
             case (state)
                 `STATE_IDLE: begin
-                    control_address_valid <= 1'b1;
+                    control_address_valid <= 1'b0;
                     control_write_to_read_only <= 1'b0;
                 end
                 `STATE_READ_ISSUE: begin
-                    case (sub_addr)
-                        default: control_read_data <= `DATA_WIDTH'b0;
-                    endcase
+                    if (control_selected)
+                        case (sub_addr)
+                            `CTRL_REG_STATUS: begin
+                                control_address_valid <= 1'b1;
+                                control_read_data <= {31'b0, pc_stall};
+                            end
+                            `CTRL_REG_START | `CTRL_REG_STOP | `CTRL_REG_STEP: begin
+                                control_address_valid <= 1'b1;
+                                // no real data to be read here
+                                control_read_data <= `DATA_WIDTH'b0;
+                            end
+                            `CTRL_REG_PC: begin
+                                control_address_valid <= 1'b1;
+                                control_read_data <= pc_read_data;
+                            end
+                            default: begin
+                                control_read_data <= `DATA_WIDTH'b0;
+                            end
+                        endcase
                 end
                 `STATE_WRITE_ISSUE: begin
-                    case (sub_addr)
-                        `CTRL_REG_START: ;
-                        `CTRL_REG_STOP: ;
-                        `CTRL_REG_STEP: pc_stall <= 1'b0;
-                        default: control_write_to_read_only <= 1'b1;
-                    endcase
+                    if (control_selected)
+                        case (sub_addr)
+                            `CTRL_REG_START: pc_stall <= 1'b0;
+                            `CTRL_REG_STOP: pc_stall <= 1'b1;
+                            `CTRL_REG_STEP: pc_stall <= 1'b0;
+                            default: control_write_to_read_only <= 1'b1;
+                        endcase
                 end
                 `STATE_WRITE_WAIT_DONE: begin
                     case (sub_addr)
@@ -303,13 +331,27 @@ module soc_control (
             endcase
         end
     end
+    // PC write issue as async block (forwarding)
+    always @(*) begin
+        pc_write_enable = 1'b0;
+        pc_write_data   = `DATA_WIDTH'b0;
+        case (state)
+            `STATE_WRITE_ISSUE: begin
+                if (control_selected)
+                    case (sub_addr)
+                        `CTRL_REG_PC: begin
+                            pc_write_enable = 1'b1;
+                            pc_write_data   = latched_write_data;
+                        end
+                    endcase
+            end
+        endcase
+    end
     always @(*) begin
         control_op_successful = 1'b0;
         case (state)
-            `STATE_READ_WAIT_DONE: control_op_successful = control_address_valid;
-            `STATE_WRITE_WAIT_DONE: begin
-                control_op_successful = control_address_valid && !control_write_to_read_only;
-            end
+            `STATE_READ_WAIT_DONE:  control_op_successful = control_read_valid;
+            `STATE_WRITE_WAIT_DONE: control_op_successful = control_write_valid;
         endcase
     end
 

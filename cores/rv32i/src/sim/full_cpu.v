@@ -82,7 +82,10 @@ module full_cpu ();
         .M_AXI_RDATA  (AXI_RDATA),
         .M_AXI_RRESP  (AXI_RRESP),
 
-        .pc_stall(pc_stall),
+        .cm_pc_stall(pc_stall),
+        .cm_pc_read_data(),
+        .cm_pc_we(1'b0),
+        .cm_pc_write_data(`DATA_WIDTH'b0),
         .cm_regfile_addr(`REG_ADDR_WIDTH'b0),
         .cm_regfile_read_data(),
         .cm_regfile_we(1'b0),

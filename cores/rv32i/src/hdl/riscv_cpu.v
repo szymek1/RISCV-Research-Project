@@ -31,7 +31,10 @@ module riscv_cpu (
     input  [  `AXI_RESP_WIDTH-1:0] M_AXI_RRESP,
 
     // connections to SOC Control Module
-    input                        pc_stall,
+    input                        cm_pc_stall,
+    output [    `DATA_WIDTH-1:0] cm_pc_read_data,
+    input                        cm_pc_we,
+    input  [    `DATA_WIDTH-1:0] cm_pc_write_data,
     input  [`REG_ADDR_WIDTH-1:0] cm_regfile_addr,
     output [    `DATA_WIDTH-1:0] cm_regfile_read_data,
     input                        cm_regfile_we,
@@ -43,7 +46,7 @@ module riscv_cpu (
     // - PC - INSTRUCTION - DECODED - ALU_RESULT (- MEM_RESULT) - NEXT_PC
 
     // PC
-    reg pc_valid, pc_ready;
+    wire pc_valid, pc_ready;
     reg [`DATA_WIDTH-1:0] pc;
 
     // INSTRUCTION
@@ -96,30 +99,29 @@ module riscv_cpu (
     // =====   Clocked Components    =====
 
     // PC generator
-    // do not accept the next pc if we are stalled or the current pc has not
+    // do not accept the next pc if the current pc has not
     // yet been transferred to the fetch unit.
-    assign next_pc_ready = !pc_stall & !pc_valid;
-    reg pc_waiting;
+    reg                          pc_release_pending;
+    assign next_pc_ready = !pc_release_pending;
+    assign pc_valid = pc_release_pending && !cm_pc_stall;
     always @(posedge CLK or negedge RSTn) begin
         if (!RSTn) begin
             pc <= `BOOT_ADDR;
-            pc_valid <= 1'b0;
-            pc_waiting <= 1'b1;
+            pc_release_pending <= 1'b1;
         end else begin
-            if (next_pc_valid & next_pc_ready) begin
+            if (next_pc_valid && next_pc_ready) begin
                 // NEXT_PC transaction
                 pc <= next_pc;
-                pc_valid <= 1'b1;
-            end else if (pc_valid & pc_ready) begin
+                pc_release_pending <= 1'b1;
+            end else if (pc_valid && pc_ready) begin
                 // PC transaction
-                pc_valid <= 1'b0;
-            end else if (pc_waiting & !pc_stall) begin
-                // kick start cycle
-                pc_valid   <= 1'b1;
-                pc_waiting <= 1'b0;
+                pc_release_pending <= 1'b0;
+            end else if (cm_pc_stall && cm_pc_we) begin
+                pc <= cm_pc_write_data;
             end
         end
     end
+    assign cm_pc_read_data = pc;
 
     reg [`DATA_WIDTH-1:0] instruction_latched;
     assign instruction_ready = 1'b1;  // always ready
@@ -181,7 +183,7 @@ module riscv_cpu (
         .rs1         (rs1),
         .rs2         (rs2),
         // WRITE BACK on NEXT_PC transaction
-        .write_enable(do_write_back && next_pc_valid  /* && next_pc_ready */),
+        .write_enable(do_write_back && next_pc_valid && next_pc_ready),
         .write_addr  (rd_addr),
         .write_data  (write_back_data),
 

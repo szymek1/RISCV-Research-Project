@@ -169,24 +169,45 @@ module cm_and_core_tb ();
         #(CLK_PERIOD * 2);
 
 
-        $display("[%0t] Read Reg 1 -> Expect 0x00000000", $time);
+        $display("[%0t] Read Reg 4 -> Expect 0x00000000", $time);
         axi_read(32'h0204, 32'h00000000, `AXI_RESP_OKAY);
-        $display("[%0t] Write Reg 1 -> 0xDEADBEEF", $time);
+        $display("[%0t] Write Reg 4 -> 0xDEADBEEF", $time);
         axi_write(32'h0204, 32'hDEADBEEF, 4'b1111, `AXI_RESP_OKAY);
-        $display("[%0t] Read Reg 1 -> Expect 0xDEADBEEF", $time);
+        $display("[%0t] Read Reg 4 -> Expect 0xDEADBEEF", $time);
         axi_read(32'h0204, 32'hDEADBEEF, `AXI_RESP_OKAY);
 
         #(CLK_PERIOD * 10);
-        `ASSERT(u_main.u_cpu.u_register_file.registers[5], `DATA_WIDTH'b0);
+        `ASSERT(u_main.u_cpu.u_register_file.registers[5], `DATA_WIDTH'b0)
+        $display("[%0t] Read Reg 5 -> Expect 0x00000000", $time);
+        axi_read(32'h0205, 32'h00000000, `AXI_RESP_OKAY);
         $display("[%0t] Single Step Core (lw x5, 0xAB)", $time);
         axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
-        #(CLK_PERIOD * 10);
-        `ASSERT(u_main.u_cpu.u_register_file.registers[5], `DATA_WIDTH'hAB);
-        `ASSERT(u_main.u_cpu.u_register_file.registers[6], `DATA_WIDTH'b0);
+        #(CLK_PERIOD * 10);  // give core time to execute
+        $display("[%0t] Read Reg 5 -> Expect 0x000000AB", $time);
+        axi_read(32'h0205, 32'h000000AB, `AXI_RESP_OKAY);
+        $display("[%0t] Read Reg 6 -> Expect 0x00000000", $time);
+        axi_read(32'h0206, 32'h00000000, `AXI_RESP_OKAY);
         $display("[%0t] Single Step Core (lw x6, 0xCD)", $time);
         axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
-        #(CLK_PERIOD * 10);
-        `ASSERT(u_main.u_cpu.u_register_file.registers[6], `DATA_WIDTH'hCD);
+        #(CLK_PERIOD * 10);  // give core time to execute
+        $display("[%0t] Read Reg 6 -> Expect 0x000000CD", $time);
+        axi_read(32'h0206, 32'h000000CD, `AXI_RESP_OKAY);
+
+        $display("[%0t] Read Reg 6 -> Expect 0x000000CD", $time);
+        axi_read(32'h0206, 32'h000000CD, `AXI_RESP_OKAY);
+        $display("[%0t] Read Status Reg -> Expect 0x00000001 (pc_stall)", $time);
+        axi_read(32'h0100, 32'h00000001, `AXI_RESP_OKAY);
+        $display("[%0t] Read PC -> Expect 0x00001008", $time);
+        axi_read(32'h0104, 32'h00001008, `AXI_RESP_OKAY);
+        $display("[%0t] Write PC -> 0x0000100C (skip one instruction)", $time);
+        axi_write(32'h0104, 32'h0000100C, 4'b1111, `AXI_RESP_OKAY);
+        $display("[%0t] Read PC -> Expect 0x0000100C", $time);
+        axi_read(32'h0104, 32'h0000100C, `AXI_RESP_OKAY);
+
+        $display("[%0t] Single Step Core (sb x5, 0(x0)", $time);
+        axi_write(32'h0103, 32'h00000001, 4'b1111, `AXI_RESP_OKAY);
+        $display("[%0t] Read Reg 7 -> Expect 0x00000000 since (lw x7, 0xEF) was skipped", $time);
+        axi_read(32'h0207, 32'h00000000, `AXI_RESP_OKAY);
 
         #(CLK_PERIOD * 5);
         $display("\n--- TB Done ---\n");
