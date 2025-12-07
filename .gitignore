@@ -18,7 +18,7 @@ simulation/
 simulation/
 proj/
 soc/RISC_V_softcore/
-soc/RISC_V_worker_ip/
+soc/RISC_V_worker_PL_layer/
 
 # for Xilinx Vivado|ISE
 .Xil/
