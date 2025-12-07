@@ -92,9 +92,9 @@ module riscv_cpu (
 
     // load/store
     wire [      `DATA_WIDTH-1:0] mem_addr;
-    reg  [      `DATA_WIDTH-1:0] mem_write_data;
-    reg  [      `DATA_WIDTH-1:0] mem_read_data;
-    reg  [`AXI_STROBE_WIDTH-1:0] mem_write_strobe;
+    wire [      `DATA_WIDTH-1:0] mem_write_data;
+    wire [      `DATA_WIDTH-1:0] mem_read_data;
+    wire [`AXI_STROBE_WIDTH-1:0] mem_write_strobe;
     wire [      `DATA_WIDTH-1:0] mem_wb_data;  // parsed by byte_reader
 
 

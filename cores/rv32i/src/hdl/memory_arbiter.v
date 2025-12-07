@@ -50,7 +50,7 @@ module memory_arbiter (
 
     // load/store
     input                              load_store_valid,
-    output reg                         load_store_ready,
+    output wire                        load_store_ready,
     input      [  `AXI_ADDR_WIDTH-1:0] load_store_addr,
     input                              load_store_is_write,
     input      [`AXI_STROBE_WIDTH-1:0] store_strobe,
@@ -120,8 +120,6 @@ module memory_arbiter (
             end
             `STATE_PC_DATA: begin
                 M_AXI_RREADY = instruction_ready;
-                instruction_valid = M_AXI_RVALID;
-                instruction = M_AXI_RDATA;
             end
             `STATE_L_DATA: begin
                 M_AXI_RREADY = 1'b1;
@@ -145,7 +143,6 @@ module memory_arbiter (
                 pc_ready = M_AXI_ARREADY;
             end
             `STATE_PC_DATA: begin
-                M_AXI_RREADY = instruction_ready;
                 instruction_valid = M_AXI_RVALID;
                 instruction = M_AXI_RDATA;
             end
