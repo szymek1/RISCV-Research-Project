@@ -116,7 +116,7 @@ $(SIM_DIR)/component_testbenches/%/sim_output.txt: $(VVP_DIR)/component_testbenc
 	@mkdir -p $(@D)
 	@echo "Running testbench \"$*\""
 	@cd $(@D) && vvp $< > $@ 2>&1
-	@if grep -q "\[ERROR\]" "$@"; then \
+	@if grep -q "ERROR" "$@"; then \
 		cat $@; \
 		echo "  Error (see $@)"; \
 	fi
@@ -126,7 +126,7 @@ $(SIM_DIR)/progs/%/sim_output.txt: $(FULL_CPU_VVP) $(DATA_DIR)/%/program.hex $(D
 	@mkdir -p $(@D)
 	@echo "Running prog \"$*\""
 	@cd $(@D) && vvp $< +data=$(DATA_DIR)/$* > $@ 2>&1
-	@if grep -q "\[ERROR\]" "$@"; then \
+	@if grep -q "ERROR" "$@"; then \
 		cat $@; \
 		echo "  Error (see $@)"; \
 	fi
