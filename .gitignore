@@ -17,8 +17,9 @@ log/
 simulation/
 simulation/
 proj/
-soc/RISC_V_softcore/
+soc/RISC_V_32i_softcore/
 soc/RISC_V_worker_PL_layer/
+soc/ip_repo/
 
 # for Xilinx Vivado|ISE
 .Xil/
@@ -37,6 +38,7 @@ xvlog.*
 *.hw
 *.backup.*
 *.debug
+*.ip_user_files
 
 # for ESP32
 src/esp/build/
