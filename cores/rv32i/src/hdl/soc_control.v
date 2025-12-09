@@ -28,9 +28,9 @@
 // Additional Comments:
 //
 //////////////////////////////////////////////////////////////////////////////////
-`include "../include/rv32i_params.vh"
-`include "../include/axi_configuration.vh"
-`include "../include/cm_commands.vh"
+`include "rv32i_params.vh"
+`include "axi_configuration.vh"
+`include "cm_commands.vh"
 
 // In theroy, _WAIT_DONE and _RESP could be condensed into one state where the
 // result is immediately returned. However, at this state we do not really care

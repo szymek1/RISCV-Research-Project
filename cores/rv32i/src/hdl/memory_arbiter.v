@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
-`include "../include/axi_configuration.vh"
-`include "../include/rv32i_params.vh"
+`include "axi_configuration.vh"
+`include "rv32i_params.vh"
 
 // god I wish we just enums
 `define STATE_WIDTH 4

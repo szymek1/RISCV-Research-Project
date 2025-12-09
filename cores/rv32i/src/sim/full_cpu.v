@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 
-`include "../include/rv32i_params.vh"
-`include "../include/axi_configuration.vh"
+`include "rv32i_params.vh"
+`include "axi_configuration.vh"
 
 module full_cpu ();
 

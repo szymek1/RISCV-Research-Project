@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
-`include "../include/rv32i_params.vh"
-`include "../include/rv32i_control.vh"
-`include "../include/axi_configuration.vh"
+`include "rv32i_params.vh"
+`include "rv32i_control.vh"
+`include "axi_configuration.vh"
 
 module cm_and_core (
     input CLK,
