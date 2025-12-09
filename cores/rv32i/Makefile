@@ -22,6 +22,7 @@ DATA_DIR        := $(ROOT_DIR)/data
 
 # Project's subdirectories
 HDL_DIR         := $(SOURCE_DIR)/hdl
+INC_DIR			:= $(SOURCE_DIR)/include
 SIM_SRC_DIR     := $(SOURCE_DIR)/sim
 CONSTRAINTS_DIR := $(SOURCE_DIR)/constraints
 
@@ -101,7 +102,7 @@ $(VVP_DIR)/%.vvp: $(SIM_SRC_DIR)/%.v
 	@echo "Compiling testbench \"$(@F:.vvp=)\""
 	@mkdir -p $(VVP_DIR)/$* $(D_DIR)/$* $(LOG_DIR)
 	@iverilog $(IVERILOG_FLAGS) \
-		-Mall=$(D_DIR)/$*.d.raw -y $(HDL_DIR) -I $(<D) -I $(HDL_DIR) \
+		-Mall=$(D_DIR)/$*.d.raw -y $(HDL_DIR) -I $(<D) -I $(HDL_DIR) -I $(INC_DIR) \
 		-DDATA_DIR=\"$(DATA_DIR)/\" \
 		-o $@ $< > $(LOG_DIR)/compile_$(@F:.vvp=).txt 2>&1
 	@{ \
