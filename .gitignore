@@ -15,9 +15,6 @@
 bin/
 log/
 simulation/
-simulation/
-proj/
-soc/RISC_V_32i_softcore/
 soc/RISC_V_worker_PL_layer/
 soc/ip_repos/ISAE_user_risc_v_32i_cm_*/
 # for Xilinx Vivado|ISE
