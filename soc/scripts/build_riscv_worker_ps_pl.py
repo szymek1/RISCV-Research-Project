@@ -139,8 +139,6 @@ def main() -> None:
 
     status = platform.update_desc(desc="PS layer of the worker")
 
-    app_path = os.path.join(abs_workspace, vitis_args.application)
-
     xpfm_path = os.path.join(abs_workspace, vitis_args.platform, "export", vitis_args.platform, "{}.xpfm".format(vitis_args.platform))
     if not os.path.exists(os.path.join(abs_workspace, vitis_args.application)):
         print("===================================")
