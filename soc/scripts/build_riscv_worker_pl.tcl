@@ -516,7 +516,7 @@ puts "--- Exporting Hardware to $xsa_name ---"
 
 # -fixed: Include the bitstream
 # -force: Overwrite if exists
-write_hw_platform -fixed -include_bit -force -file $xsa_name
+write_hw_platform -fixed -include_bit -force -file "../$xsa_name"
 
 puts "========================================================"
 puts " BUILD COMPLETE "
