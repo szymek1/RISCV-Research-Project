@@ -28,7 +28,7 @@ VERBOSITY    := 1
 SCRIPTS_DIR  := scripts
 CORE_DIR     := $(ROOT_DIR)/../cores/$(CORE)
 
-.PHONY: riscv_ip riscv_worker_pl riscv_worker_ps_pl
+.PHONY: riscv_ip riscv_worker_pl riscv_worker_ps
 
 # Building RISC-V IP Core
 riscv_ip:
@@ -43,7 +43,7 @@ riscv_worker_pl: riscv_ip
 	@vivado -mode batch -source $(SCRIPTS_DIR)/build_riscv_worker_pl.tcl \
 			-tclargs $(PROJECT_NAME) $(TARGET_PART) $(BOARD_PART) $(HW)
 
-riscv_worker_ps_pl:
+riscv_worker_ps:
 	@echo "Creating RISC-V worker PS layer for: "
 	@echo "CPU: $(CPU)"
 	@echo "Based on XSA: $(ROOT_DIR)/$(HW)"
