@@ -28,7 +28,7 @@ VERBOSITY    := 1
 SCRIPTS_DIR  := scripts
 CORE_DIR     := $(ROOT_DIR)/../cores/$(CORE)
 
-.PHONY: riscv_ip riscv_worker_pl riscv_worker_ps
+.PHONY: riscv_ip riscv_worker_pl riscv_worker_ps all clean_riscv_ip clean_riscv_worker_pl clean_riscv_worker_ps clean
 
 # Building RISC-V IP Core
 riscv_ip:
@@ -56,3 +56,19 @@ riscv_worker_ps:
 			  --cpu       "$(CPU)"                         \
 			  --code      "$(CODE)"                        \
 			  --verbose   $(VERBOSITY)
+
+all: riscv_worker_pl riscv_worker_ps:
+
+clean_riscv_ip:
+	@echo "Removing ip_repos/..."
+	@rm -rf ip_repos/
+
+clean_riscv_worker_pl:
+	@echo "Removing build_riscv_worker_pl"
+	@rm -rf build_riscv_worker_pl/
+
+clean_riscv_worker_ps:
+	@echo "Removing $(WORKSPACE)/"
+	@rm -rf $(WORKSPACE)/
+
+clean: clean_riscv_ip clean_riscv_worker_pl clean_riscv_worker_ps
