@@ -20,13 +20,12 @@
 # =============================================================================================================
 
 # ================== 1. Configuration ==================
-set project_name    "RISC_V_worker_PL_layer"
-set output_dir      "../build_riscv_worker_pl"
-set ip_repo_dir     "../ip_repos"
-set target_part     "xc7z020clg400-1"
-set board_part      "digilentinc.com:zybo-z7-20:part0:1.2"
-set xsa_name        "riscv_worker_hardware.xsa"
-
+set project_name    [lindex $argv 0]
+set output_dir      "build_riscv_worker_pl"
+set ip_repo_dir     "ip_repos"
+set target_part     [lindex $argv 1]
+set board_part      [lindex $argv 2]
+set xsa_name        [lindex $argv 3]
 # How many threads should perform synthesis and implementation tasks
 set threads_num     2
 
@@ -516,7 +515,7 @@ puts "--- Exporting Hardware to $xsa_name ---"
 
 # -fixed: Include the bitstream
 # -force: Overwrite if exists
-write_hw_platform -fixed -include_bit -force -file "../$xsa_name"
+write_hw_platform -fixed -include_bit -force -file $xsa_name
 
 puts "========================================================"
 puts " BUILD COMPLETE "
