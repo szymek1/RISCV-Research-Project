@@ -10,17 +10,17 @@
 # =============================================================================================================
 
 # ==================Project Settings ==================
-set ip_name        "risc_v_32i_cm"
-set ip_vendor      "ISAE"
-set ip_library     "user"
-set ip_version     "1.0"
+set ip_name        [lindex $argv 0]
+set ip_vendor      [lindex $argv 1]
+set ip_library     [lindex $argv 2]
+set ip_version     [lindex $argv 3]
 set ip_display_name "RISC-V 32i core with control module"
-set target_part    "xc7z020clg400-1"
-
+set target_part    [lindex $argv 4]
+set core_name      [lindex $argv 5]
 # ================== File Paths ==================
-set sources_dir    "../../cores/rv32i/src/hdl"
-set headers_dir    "../../cores/rv32i/src/include"
-set output_repo    "../ip_repos"
+set sources_dir    "../cores/$core_name/src/hdl"
+set headers_dir    "../cores/$core_name/src/include"
+set output_repo    "ip_repos"
 
 # List of files to exclude (full paths or basenames)
 set exclude_list [list "axi_memory_mock.v" "bram32.v"]
