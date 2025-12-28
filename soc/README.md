@@ -39,12 +39,21 @@ The recommended development is as follows:
 4. Run (from ```scripts/```): ```vitis -s build_riscv_worker_ps_pl.py --workspace "../vitis_ws" --hw_design "../riscv_worker_hardware.xsa" --code "../zynq" --verbose 1```. This will create Vitis project, compile both platform and application.
 5. Open Vitis and program the device.
 
+#### Makefile
+Use ```make``` to invoke the following targets which effectively call scripts described above:
+
+- ```make riscv_ip```: builds RISC-V IP Core based on Makefile configuration
+- ```make riscv_worker_pl```: builds full PL layer
+- ```make riscv_worker_ps```: builds full PS layer based on the current XSA file (instantiates Vitis project)
+- ```make all```: builds everything
+- ```make clean_riscv_ip```: removes ```ip_repos/```
+- ```make clean_riscv_worker_pl```: removes ```build_riscv_worker_pl/```
+- ```make clean_riscv_worker_ps```: removes ```vitis_ws/```
+- ```make clean```: removes all directories above
+
 **Remarks:** 
-- steps 1 and 2 are only mandatory when the block diagram changes, otherwise user can proceed with step 3 immediately. 
-- resort to ```scripts/build_riscv_worker_ps_pl.py``` for more detailed description of the parser of execute ```vitis -s build_riscv_worker_ps_pl.py -h```.
-- in order to run ```scripts/RISC_V_worker_PL_layerl.tcl``` user has to delete directory ```RISC_V_worker_PL_layer/``` (Vivado forces to work like that...).
 - currently Vitis automatization is not yet perfect: Vitis project copies files from ```zynq/``` therefore making a copy which doesn't update when sources in ```zynq/``` update or the other way around. This has to be resolved. Only files from ```zynq/``` are included into the repository, so it is important to keep them up to date. So far in order to regenerate Vitis project with updated sources its directory ```vitis_ws/``` has to be deleted and the script re-executed.
 
 #### TODO
-- fix ```scripts/build_riscv_worker_ps_pl.py``` so it either deletes and properly retargets the new application component with new sources from ```zynq/``` or use other kind of magic to solve it.
-- combine entire workflow into Makefile targets
+- fix ```scripts/build_riscv_worker_ps_pl.py``` so it either deletes and properly retargets the new application component with new sources from ```zynq/``` or use other kind of magic to solve it. **NOT YET DONE**
+- combine entire workflow into Makefile targets **WAITING FOR VALIDATION**
