@@ -11,7 +11,8 @@
 # 2. Block diagram creation: instantiation of all IP Cores (vendor's and custom)
 # 3. Execution: block diagram validation -> synthesis -> implementation -> bit stream generation -> XSA export
 #
-# In order to run it execute: vivado -mode batch -source build_riscv_worker_pl.tcl
+# In order to run it execute: vivado -mode batch -source build_riscv_worker_pl.tcl (doesn't work anymore: got 
+# adjusted to work only with Makefile)
 #
 # Remarks: in order to make sure the block diagram is properly designed execute:
 # vivado -mode gui -source RISC_V_worker_PL_layerl.tcl 

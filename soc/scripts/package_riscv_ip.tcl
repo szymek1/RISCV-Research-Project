@@ -2,9 +2,10 @@
 # This script creates custom RISC-V IP Core. It utilizes any implementation provided in the File Paths section.
 # The script imports files from that location by coopying them, therefore in case of an update of the core
 # it is necessary to re-execute this script to refresh the IP repository.
-# Run the script with: vivado -mode batch -source ./package_riscv_ip.tcl
+# Run the script with: vivado -mode batch -source ./package_riscv_ip.tcl (doesn't work anymore: got adjusted 
+# to work only with Makefile)
 # Then in order to get latest block diagram project of an entire system run either:
-# vivado -mode batch -source build_riscv_worker_pl.tcl (non-GUI mode)
+# vivado -mode batch -source build_riscv_worker_pl.tcl (non-GUI mode) (doesn't work standalone: check the script)
 # or
 # vivado -mode gui -source RISC_V_worker_PL_layerl.tcl (GUI mode)
 # =============================================================================================================

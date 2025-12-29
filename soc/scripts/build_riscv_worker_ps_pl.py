@@ -2,7 +2,7 @@
 The following script allows for automatic Vitis project generation.
 It will copy files from the provided with --code directory and include
 them into application component which will be compiled.
-Example command:
+Example command (use only from Makefile!!!):
 vitis -s build_riscv_worker_ps_pl.py --workspace "../vitis_ws" --hw_design "../riscv_worker_hardware.xsa" --code "../zynq" --verbose 1
 
 Current issues:
