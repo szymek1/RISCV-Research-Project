@@ -19,9 +19,7 @@ This is Vivado project which defines the connections between HDL part of the pro
 This command will create ```RISC_V_softcore/``` directory and inside it Vivado will regenerate the project.
 
 ### Development
-Once the project is regenerate user can edit it however they want but it is ***crucial to recreate tcl file*** as this is the only part of Vivado project that goes to the source control.
-
-In order to do it properly go to: *File->Project->Write TCL*, then check: *Copy sources to new project* (**TODO: do we need that?**) and *Recreate Block Designs using TCL*. Finally, overwrite the file.
+The build system utilizes both TCL scripting for Vivado (PL layer) and Vitis Python API for Vitis (PS layer, full integration).
 
 In ```soc/``` directory ```scripts/``` directory contains three scripts necessary to:
 
@@ -31,15 +29,38 @@ In ```soc/``` directory ```scripts/``` directory contains three scripts necessar
 
 Additionally, as a safe check there's also ```soc/RISC_V_worker_PL_layer.tcl```, which can be used to regenerate Vivado project in GUI mode to graphically prepare the block diagram.
 
-The recommended development is as follows:
+Those scripts can be called in an automatic and customized way from ```Makefile``` which resides inside ```soc/``` directory.
 
-1. Run: ```vivado -mode gui -source RISC_V_worker_PL_layerl.tcl``` and graphically create the block diagram project. Then do: *File->Project->Write TCL* and check: *Copy sources to new project* and *Recreate Block Designs using TCL*.
-2. Open ```scripts/build_riscv_worker_pl.tcl``` and copy all the lines from ```RISC_V_worker_PL_layerl.tcl``` into the script so it has the latest design.
-3. Run (from ```scripts/```): ```vivado -mode batch -source build_riscv_worker_pl.tcl```. This will prepare ```xsa``` and save it in ```soc```.
-4. Run (from ```scripts/```): ```vitis -s build_riscv_worker_ps_pl.py --workspace "../vitis_ws" --hw_design "../riscv_worker_hardware.xsa" --code "../zynq" --verbose 1```. This will create Vitis project, compile both platform and application.
-5. Open Vitis and program the device.
+Complete the ```Makefile``` according to selected RISC-V IP Core, target and board parts, microcontoller cpu, location of C code etc...
 
-#### Makefile
+```make
+# Project details
+# RISC-V IP Core
+CORE         := rv32i # this should correspond to the directory inside cores/ from 
+                      # which RISC-V IP Core is to be fetched
+IP_NAME      := risc_v_32i_cm # name of the IP Core inside the block diagram
+IP_VENDOR    := ISAE
+IP_LIBRARY   := user
+IP_VERSION   := 1.0
+
+# Hardware information
+TARGET_PART  := xc7z020clg400-1
+BOARD_PART   := digilentinc.com:zybo-z7-20:part0:1.2
+
+# Vivado (PL layer)
+PROJECT_NAME := RISC_V_worker_PL_layer
+HW           := riscv_worker_hardware.xsa
+
+# Vitis (PS layer)
+WORKSPACE    := vitis_ws
+PLATFORM     := RISC_V_worker_PS_layer_platform
+CPU          := ps7_cortexa9_0
+APPLICATION  := RISC_V_worker_PS_application
+CODE         := zynq # this directory has to contain the src/ and include/ directory
+                     # with the source code that Vitis will copy inside its project
+                     # and compile
+VERBOSITY    := 1
+```
 Use ```make``` to invoke the following targets which effectively call scripts described above:
 
 - ```make riscv_ip```: builds RISC-V IP Core based on Makefile configuration
@@ -50,6 +71,13 @@ Use ```make``` to invoke the following targets which effectively call scripts de
 - ```make clean_riscv_worker_pl```: removes ```build_riscv_worker_pl/```
 - ```make clean_riscv_worker_ps```: removes ```vitis_ws/```
 - ```make clean```: removes all directories above
+
+It is possible to to use GUI version for Vivado Block Diagram Project, which eases modifications which have to be done to ```scripts/build_riscv_worker_pl.tcl``` in order to modify the design. Run from ```soc/```:
+
+```vivado -mode gui -source RISC_V_worker_PL_layerl.tcl ```
+
+Then modify the desing and once completed do: *File->Project->Write TCL*, then check: *Copy sources to new project* and *Recreate Block Designs using TCL*. Finally, overwrite the file. Finally you can open newly generated script and copy-paste relevant parts of it inside ```scripts/build_riscv_worker_pl.tcl```.
+
 
 **Remarks:** 
 - currently Vitis automatization is not yet perfect: Vitis project copies files from ```zynq/``` therefore making a copy which doesn't update when sources in ```zynq/``` update or the other way around. This has to be resolved. Only files from ```zynq/``` are included into the repository, so it is important to keep them up to date. So far in order to regenerate Vitis project with updated sources its directory ```vitis_ws/``` has to be deleted and the script re-executed.
