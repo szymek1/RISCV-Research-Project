@@ -85,3 +85,4 @@ Then modify the desing and once completed do: *File->Project->Write TCL*, then c
 #### TODO
 - fix ```scripts/build_riscv_worker_ps_pl.py``` so it either deletes and properly retargets the new application component with new sources from ```zynq/``` or use other kind of magic to solve it. **NOT YET DONE**
 - combine entire workflow into Makefile targets **WAITING FOR VALIDATION**
+- inside ```scripts/build_riscv_worker_pl.tcl``` things like ISAE, user, risc_v_32i_cm_0 are still hardcoded names: change them to makefile configureable
